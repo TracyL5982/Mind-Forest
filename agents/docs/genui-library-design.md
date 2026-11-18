@@ -21,7 +21,7 @@ The prompt for this pass was a gallery of another product's generative UI (65 bu
 - Controls that collect input from the user (forms, wizards, date pickers). Controls that let the user explore content are in: see step 5.
 - Recording a voice memo inside the app. Audio files can be dropped in.
 - Routes and directions on maps.
-- Any headset client, visionOS or Quest. `docs/libraries.md` stays the specification a Quest client will be built from, and is updated.
+- The Quest client. `docs/libraries.md` stays the specification a Quest client will be built from, and is updated.
 - Changes to how the Scout searches or chooses, to the Organizer, or to the tree layout. (The Scout does pass more of each record through; see step 2.)
 - Scaling a card inside a group. A card keeps its own footprint everywhere.
 
@@ -39,7 +39,6 @@ The prompt for this pass was a gallery of another product's generative UI (65 bu
 - `isValidView` and `isValidGroup` reject anything a schema does not describe. A client that meets an unknown component draws a note, and an unknown composite draws a cluster. Both stay true.
 - Views already stored stay valid. No migration.
 - No new dependencies in steps 1 to 4. Step 5 may add one small library to read a photo's location if writing it by hand proves unreasonable. The client stays plain JavaScript modules.
-- The visionOS app (`visionos/MindPalace/Ocean/Agent/AgentBridge.swift`) switches on `view.component` and draws a picture only for `image`, and for `video` with a poster. A pick that changes from `image` to a new picture-led type would lose its picture there. See the last section.
 
 ## Approaches considered
 
@@ -239,6 +238,3 @@ Two more card types and one more arrangement: 28 types and 14 arrangements in al
 - The live-model sample run is a script, not part of `npm test`.
 - `sheet` is capped at four sections.
 
-## The visionOS app
-
-The repository's visionOS app reads the same views and draws a picture only for `image` (and `video` with a poster). The target is Quest 3, so this pass does no Swift work. Known effect: in that app, a museum pick that becomes an `artwork` shows as text without its picture.

@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Grid.swift.
+// The grid under a layer (see grid.h).
 #include "grid.h"
 
 #include <cstddef>
@@ -34,7 +34,7 @@ void SheetGrid::clear() {
 }
 
 void SheetGrid::draw(const Stage& stage, const Stage::Sheet& sheet, Vec2 origin, float cell, float dots, float lines, bool fine) {
-    // (The Swift makes an array of these each time; here they are compared where they stand.)
+    // (They are compared where they stand.)
     const float key[] = {origin.x, origin.y, cell, dots, lines, fine ? 1.f : 0.f, sheet.curve, sheet.up.y, sheet.hinge.x, sheet.hinge.z};
     if (std::size(key) == last.size()) {
         bool same = true;

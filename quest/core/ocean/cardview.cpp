@@ -1,8 +1,8 @@
-// Port of visionos/MindPalace/Ocean/CardView.swift.
+// A card as the scene shows it (see cardview.h).
 #include "cardview.h"
 
 namespace {
-/// Swift's `defer`: runs `body` when the scope it stands in is left.
+/// A scope guard: runs `body` when the scope it stands in is left.
 template <class F>
 struct Deferred {
     F body;
@@ -11,7 +11,7 @@ struct Deferred {
 template <class F>
 Deferred(F) -> Deferred<F>;
 
-/// NOTE(port): added for Quest (WS76). Cards of a layer stand on one sheet, and where two overlap (on a layer behind
+/// Cards of a layer stand on one sheet, and where two overlap (on a layer behind
 /// especially), or a card met a pane, their faces lay in one plane and fought over which shows. Each stands a little off it
 /// by its own amount: none to three steps of 0.3 mm (as a card's own pieces are stacked), by its id. (One to four steps
 /// put one card of the tree the depth audit walks back onto a pane.)
@@ -26,7 +26,7 @@ CardView::CardView(const TreeNode& node, Vec2 smallBody, Vec2 openBody)
     root->addChild(stepHolder);
     stepHolder->isEnabled = false;
     openHolder->isEnabled = false;
-    // NOTE(port): added for Quest. The open face lies a little in front of the small one. While one gives
+    // The open face lies a little in front of the small one. While one gives
     // way to the other they are bent into different columns, and in one plane each column of one would
     // hide the other's in stripes.
     openHolder->position.z = openLift;
@@ -56,7 +56,7 @@ void CardView::apply(double now, const Stage::Spot& spot, float boost, float cur
     position = source + (treePoint - source) * e + drag.value(now) + spot.normal * (ownDepthStep * float(((id % ownDepths) + ownDepths) % ownDepths));
     root->position = position;
     root->orientation = spot.orientation();
-    if (sourceTurn && e < 1) root->orientation = slerp(*sourceTurn, spot.orientation(), smoothstep(0, 0.7f, e));      // NOTE(port): see `sourceTurn`
+    if (sourceTurn && e < 1) root->orientation = slerp(*sourceTurn, spot.orientation(), smoothstep(0, 0.7f, e));      // see `sourceTurn`
     right = spot.right;
     up = spot.up;
     normal = spot.normal;
@@ -140,12 +140,10 @@ void CardView::setGlow(float v) {
 }
 
 Screen::Screen(bool muted) {
-    // NOTE(port): `player.actionAtItemEnd = .none` has nothing to set here: a VideoPlayer does
-    // nothing of its own at the end of its film but call `didPlayToEnd`.
+    // A VideoPlayer does nothing of its own at the end of its film but call `didPlayToEnd`.
     player->setVolume(muted ? 0 : 0.35f);
     material = Material::videoMaterial(player);
-    // NOTE(port): the Swift hears of every item that ends and checks that it is this player's
-    // current one; `didPlayToEnd` is this player's own, so there is nothing to check.
+    // `didPlayToEnd` is this player's own, so there is nothing to check.
     player->didPlayToEnd = [this] {
         player->seek(0);
         player->play();
@@ -170,8 +168,7 @@ void Screen::show(int film, const std::string& url, Vec2 size, const EntityRef& 
 void Screen::loop(std::optional<Span> range) {
     span = range;
     if (!(range && film)) return;
-    // NOTE(port): the Swift seeks with no tolerance either side (to the very frame), here and
-    // in `update`; VideoPlayer::seek has one kind of seek, and how near it lands is the host's.
+    // VideoPlayer::seek has one kind of seek, here and in `update`, and how near it lands is the host's.
     player->seek(range->lowerBound);
     player->play();
 }
@@ -193,10 +190,9 @@ void Screen::hide() {
     // the last thing seen is a black frame.
     if (entity) entity->removeFromParent();
     entity = nullptr;
-    // NOTE(port): the Swift asks the main queue to run this 0.15 s on: if no film is showing
-    // by then and the player still holds the one it held here, the player lets it go. There
-    // is no queue to ask here; the moment is kept and `update`, which runs every frame, acts
-    // on it. A film shown and hidden again in between moves the moment on, as there.
+    // 0.15 s on, if no film is showing by then and the player still holds the one it held here, the player
+    // lets it go: the moment is kept and `update`, which runs every frame, acts on it. A film shown and hidden
+    // again in between moves the moment on.
     dropAt = mediaTime() + 0.15;
 }
 
@@ -206,8 +202,7 @@ void Screen::update() {
         // `player.replaceCurrentItem(with: nil)`: an empty path lets the film go.
         if (!film) player->load("");
     }
-    // NOTE(port): `player.currentItem` is there whenever `entity` is (`show` sets both), and
-    // `item.status == .readyToPlay` is `player->ready()`.
+    // The player's film is there whenever `entity` is (`show` sets both); `player->ready()` says it can play.
     if (!entity) return;
     if (span && player->ready() && player->currentTime() >= span->upperBound) {
         player->seek(span->lowerBound);

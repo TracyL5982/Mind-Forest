@@ -1,4 +1,4 @@
-// The small things every ported file leans on: the clock, the log, launch
+// The small things every file of the scene leans on: the clock, the log, launch
 // flags, string formatting, and the seeded random the layouts share.
 #pragma once
 #include <cstdarg>
@@ -22,13 +22,11 @@ std::optional<std::string> base64Decode(const std::string& text);
 /// NSLog. On the headset it goes to logcat under the tag "ocean"; on the Mac to stderr.
 void logLine(const std::string& line);
 
-/// Launch flags, as the visionOS app reads them from UserDefaults and
-/// CommandLine: `-demo`, `-walk 3`, `-frameWidth 120`.
-///   CommandLine.arguments.contains("-demo")          -> Flags::has("demo")
-///   UserDefaults.standard.double(forKey: "walk")     -> Flags::number("walk")   (0 when absent)
-///   UserDefaults.standard.integer(forKey: "walk")    -> Flags::integer("walk")  (0 when absent)
-///   UserDefaults.standard.string(forKey: "mark")     -> Flags::string("mark")   (nullopt when absent)
-///   UserDefaults.standard.object(forKey: "x") != nil -> Flags::has("x")
+/// Launch flags: `-demo`, `-walk 3`, `-frameWidth 120`.
+///   Flags::has("demo")        whether it was given
+///   Flags::number("walk")     its value as a number (0 when absent)
+///   Flags::integer("walk")    as a whole number (0 when absent)
+///   Flags::string("mark")     as text (nullopt when absent)
 /// Keys are given without the leading dash.
 namespace Flags {
 /// The flags a list of launch arguments holds, as `set` reads them: "-walk 3" is walk: "3", "-demo" is demo: "".
@@ -41,7 +39,7 @@ std::optional<std::string> string(const std::string& key);
 const std::vector<std::string>& arguments();
 }
 
-/// Layout/Sphere.swift's SeededRandom (splitmix64): the same numbers on both platforms.
+/// A seeded random (splitmix64): the same numbers on every host.
 struct SeededRandom {
     uint64_t state;
     explicit SeededRandom(uint64_t state) : state(state) {}

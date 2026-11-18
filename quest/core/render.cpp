@@ -28,7 +28,7 @@
 
 // MARK: - Shaders
 
-// A picture's texels are premultiplied and gamma-encoded (as UIKit and
+// A picture's texels are premultiplied and gamma-encoded (as the canvas and
 // Android draw them). They are filtered that way, which keeps soft edges
 // clean, then taken apart here: un-premultiplied, brought to linear light.
 static const char* kToLinear = R"(
@@ -49,7 +49,7 @@ uniform mat4 uUVMatrix;
 out highp vec2 vUV;
 out highp vec2 vUV1;
 void main() {
-    // RealityKit's v grows upward; a picture's first row is its top.
+    // v grows upward; a picture's first row is its top.
     vUV = (uUVMatrix * vec4(aUV0.x, 1.0 - aUV0.y, 0.0, 1.0)).xy;
     vUV1 = aUV1;
     gl_Position = uViewProj[VIEW] * (uModel * vec4(aPos, 1.0));

@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Diagrams.swift.
+// The small diagrams drawn on notes.
 #pragma once
 #include <string>
 

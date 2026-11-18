@@ -13,10 +13,10 @@ import java.io.File
  * OpenXR frame loop in main.cpp); this starts it and hands it what it needs
  * from Android: launch flags, and where the media and the app's own files are.
  *
- * Launch flags are the visionOS app's, passed as one string:
+ * Launch flags are passed as one string:
  *   adb shell am start -n com.kaifengwu.mindpalace.ocean/com.kaifengwu.mindpalace.MainActivity --es args "-demo -fps"
  *
- * Media (the visionOS bundle's resources: ocean.json, clips/, works/) is not
+ * Media (the library: ocean.json, clips/, works/) is not
  * inside a developer build's APK. It is copied once to the app's external files
  * folder by quest/tools/push_media.sh, so installing a new build takes seconds.
  * The judging build (quest/tools/judge.sh) carries it inside the APK, and reads

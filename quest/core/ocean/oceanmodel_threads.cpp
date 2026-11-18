@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/OceanModel.swift: `// MARK: - Threads`.
+// The ocean's model: the threads.
 #include "oceanmodel.h"
 
 #include <cmath>
@@ -227,10 +227,9 @@ std::map<int, Vec2> OceanModel::makeRoom(const Tree& tree, int depth) const {
 
 void OceanModel::drawThreads(double now, float dt) {
     if (!threads || !art) return;
-    // NOTE(port): `list`, `words`, `grown`, `straight` and `touching` are made afresh here in the
-    // Swift, and `hubs`, `hubIDs`, `said`, `live` and `spots` further down. They are the model's
-    // own here, emptied before they are filled (see oceanmodel.h): the same things, in the same
-    // order, without asking for memory on every frame the tree moves.
+    // `list`, `words`, `grown`, `straight` and `touching` here, and `hubs`, `hubIDs`, `said`, `live` and
+    // `spots` further down, are the model's own, emptied before they are filled (see oceanmodel.h), so
+    // no memory is asked for on every frame the tree moves.
     list.clear();
     words.clear();          // the label on a thread: its text, color and size
     grown.clear();          // how much of a thread is drawn yet

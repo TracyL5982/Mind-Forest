@@ -1,11 +1,11 @@
-// Port of visionos/MindPalace/Ocean/Bend.swift.
+// Bending a flat card onto the curve of its layer (see bend.h).
 #include "bend.h"
 
 #include <cstddef>
 #include <limits>
 
 namespace {
-/// Swift's `defer`: runs `body` when the scope it stands in is left.
+/// A scope guard: runs `body` when the scope it stands in is left.
 template <class F>
 struct Deferred {
     F body;
@@ -49,7 +49,7 @@ void Bend::update(const EntityRef& root, float curve, bool moved) {
         for (const EntityRef& child : e->children) {
             if (!child->isEnabled) continue;
             if (showsShapes() && child->name == shapesName) continue;
-            // (`child as? ModelEntity`, with a mesh.)
+            // (A child with a mesh.)
             if (child->model && child->model->mesh) {
                 if (std::shared_ptr<Part> part = draw(child, child->model->mesh, root, curve, still)) showing.push_back(part);
             }
@@ -151,7 +151,7 @@ void Bend::place(Part& part, float curve, bool exactly) {
             low->setPart(count, BoundingBox{lo - Vec3::repeating(0.001f), hi + Vec3::repeating(0.001f)});
         }
         if (!part.shown) {
-            // (MeshResource(from: low) is the LowLevelMesh itself.)
+            // (The shown mesh is the LowLevelMesh itself.)
             part.shown = part.low;
             if (e->model) e->model->mesh = part.low;
         }
@@ -200,11 +200,10 @@ std::optional<Bend::Cut> Bend::cut(const MeshRef& mesh, const Mat4& matrix, floa
     };
     std::vector<Vec3> points;
     std::vector<Vec2> uvs;
-    // NOTE(port): the Swift reads the mesh back through `mesh.contents`: every part of every
-    // model, once for each instance with that instance's transform. A Mesh here keeps what it was
+    // A Mesh keeps what it was
     // made from as one model of one part with no instance transform (its `positions`, `uvs` and
     // `indices`), so `take` is called once, on the mesh itself. A LowLevelMesh keeps none, and
-    // nothing is taken from it, as on visionOS.
+    // nothing is taken from it.
     auto take = [&](const Mesh& part, const Mat4& within) {
         const std::vector<Vec3>& positions = part.positions;
         const std::vector<uint32_t>& index = part.indices;

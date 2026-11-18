@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Tree.swift.
+// A tree: its cards, how they branch, and where each stands on its layer.
 #pragma once
 #include <array>
 #include <cmath>
@@ -26,7 +26,7 @@ constexpr float openFilmMaxHeight = 0.32f;
 constexpr float filmCaption = 0.116f;       // the panel under an open film
 constexpr float smallNoteWidth = 0.21f;
 constexpr float openNoteWidth = 0.46f;
-// NOTE(port): added for Quest: the stage a lesson of the welcome tree was made for, which its gesture's size is
+// The stage a lesson of the welcome tree was made for, which its gesture's size is
 // given against (oceanmodel_guide.cpp, `TourStep::stage`). Its note keeps these proportions; the stage on its
 // card is as wide as the card's panel and `lessonStageTall`.
 constexpr float lessonWidth = 0.56f;
@@ -69,7 +69,7 @@ struct Branching {
     static constexpr int deep = 2;                          // how many nearer layers stay in sight, condensed
     static constexpr int keep = 3;                          // cards a condensed group keeps
     static constexpr float small = 0.45f;                   // how small a condensed card is
-    // NOTE(port): `float` in the Swift; a C++ keyword.
+    // `float` is a C++ keyword, hence the underscore.
     static float float_() { static const float v = asked("float").value_or(0.075f); return v; }     // m a condensed group stands off its sheet, per level
     static constexpr float hug = 0.045f;                    // m of air kept round a condensed group
     static constexpr float glassLayers = 2;                 // layers, from the one you work on, whose groups stand on glass
@@ -109,7 +109,7 @@ struct Seat {
     int depth = 0;
     Vec2 xy;
     float scale = 1;
-    float float_ = 0;           // in steps of `Branching.float`. NOTE(port): `float` in the Swift; a C++ keyword
+    float float_ = 0;           // in steps of `Branching.float` (`float` is a C++ keyword)
     bool visible = true;
 };
 
@@ -139,7 +139,7 @@ struct TreeNode {
     bool placed = false;        // put where it is by hand
     std::optional<float> imp;   // how much it matters, 0…1: what stays when its group condenses
 
-    /// Every key but `parent` and `imp` has to be there, as Swift's own decoding has it.
+    /// Every key but `parent` and `imp` has to be there.
     static std::optional<TreeNode> from(const Json& j);
     Json json() const;
 };
@@ -214,7 +214,7 @@ public:
 
     std::vector<int> path() const { return path(current); }
 
-    /// `node(for:)`. NOTE(port): the Swift takes whichever the dictionary gives first; here, the lowest id.
+    /// The node for a piece: if there are several, the lowest id.
     std::optional<TreeNode> node(const Ref& ref) const;
 
     // MARK: - Layers
@@ -238,7 +238,7 @@ public:
     /// the one you stand on and is only opened, a click on a branch, the group it stands in there, its parent's.
     int openGroup() const;
 
-    // NOTE(port): added for Quest. The welcome tree is a walk (oceanmodel_guide.cpp), and every step of it
+    // The welcome tree is a walk (oceanmodel_guide.cpp), and every step of it
     // should look like the last: a card taken comes to the middle of its layer (any other tree's keeps most
     // of where it stood), and what a card brings has set places, the next card on its right.
     bool walk() const;
@@ -480,7 +480,7 @@ public:
         int nextID = 0;
         std::vector<OceanNote> notes;       // the gardener's answers it holds, which the library doesn't
 
-        /// Every key has to be there, as Swift's own decoding has it.
+        /// Every key has to be there.
         static std::optional<Saved> from(const Json& j);
         Json json() const;
     };

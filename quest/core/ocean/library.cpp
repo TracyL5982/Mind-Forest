@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Content/ClipLibrary.swift and Content/WorkLibrary.swift.
+// The library's films and works (see library.h).
 #include "library.h"
 
 #include "../platform.h"
@@ -6,8 +6,8 @@
 namespace {
 
 /// How many characters a string has.
-/// NOTE(port): Swift counts Characters (what a reader sees as one letter); this counts Unicode
-/// scalars. They are the same unless the text holds combining marks or joined emoji.
+/// This counts Unicode scalars, which are what a reader sees as one letter unless the text holds
+/// combining marks or joined emoji.
 int count(const std::string& s) {
     int n = 0;
     for (unsigned char c : s) {
@@ -20,7 +20,7 @@ bool hasPrefix(const std::string& s, const std::string& prefix) { return s.compa
 
 }  // namespace
 
-// MARK: - ClipLibrary.swift
+// MARK: - ClipLibrary
 
 std::optional<ClipTag> ClipTag::from(const Json& j) {
     ClipTag t;
@@ -42,7 +42,7 @@ std::optional<Clip> Clip::from(const Json& j) {
         !decode::integer(j["year"], c.year) || !decode::string(j["genre"], c.genre) || !decode::strings(j["cast"], c.cast) ||
         !decode::string(j["scene"], c.scene) || !decode::real(j["aspect"], c.aspect) || !decode::real(j["loopAspect"], c.loopAspect) ||
         !decode::integers(j["tile"], c.tile) || !decode::value(j["full"], c.full) || !decode::value(j["tag"], c.tag)) return std::nullopt;
-    // NOTE(port): added for Quest (core/cards/pieces.h). Optional, so a clips.json without them still loads.
+    // Optional, so a clips.json without them still loads.
     decode::strings(j["genres"], c.genres);
     decode::string(j["description"], c.description);
     decode::string(j["videoid"], c.videoid);
@@ -69,7 +69,7 @@ struct ClipManifest {
 }  // namespace
 
 std::shared_ptr<ClipLibrary> ClipLibrary::make() {
-    // NOTE(port): the bundle's "clips" folder is not looked up on its own: a host finds files, by
+    // The "clips" folder is not looked up on its own: a host finds files, by
     // name. Whether it is there is whether its clips.json can be read.
     std::string folder = "clips";
     std::optional<std::string> data = platform::readText(folder + "/clips.json");
@@ -116,7 +116,7 @@ Color genreColor(const std::string& genre) {
     return Color{float((hex >> 16) & 0xFF) / 255, float((hex >> 8) & 0xFF) / 255, float(hex & 0xFF) / 255, 1};
 }
 
-// MARK: - WorkLibrary.swift
+// MARK: - WorkLibrary
 
 /// When it was made, short enough for a label.
 std::string Work::when() const {
@@ -165,7 +165,7 @@ WorkLibrary::WorkLibrary() = default;
 WorkLibrary::~WorkLibrary() = default;
 
 std::shared_ptr<WorkLibrary> WorkLibrary::make() {
-    // NOTE(port): as in ClipLibrary: the "works" folder is there if its works.json can be read.
+    // As in ClipLibrary: the "works" folder is there if its works.json can be read.
     std::string folder = "works";
     std::optional<std::string> data = platform::readText(folder + "/works.json");
     if (!data) return nullptr;

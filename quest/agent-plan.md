@@ -2,11 +2,11 @@
 
 The goal is the agent service in `agents/` working inside the Quest app. You pinch a card and the Scout's new material grows round it, picks stay dashed until kept, the knife and the clap reach the agents, pictures and media come from the service, and voice runs through the service. First over USB and wireless adb, so testing can start soon. Then from anywhere.
 
-Branch: `tracy/quest-agents`, made from `quest-port` with `tracy/agents` merged in. `visionos/` is exactly as `quest-port` has it; the Vision Pro adapter is retired.
+Branch: `tracy/quest-agents`, made from `quest-project` with `tracy/agents` merged in.
 
 ## Decisions taken
 
-- **Quest only.** The client is new C++ in `quest/core/agent/`, outside the ported scene. The scene gets small hooks, each marked `// AGENT:`. PORTING.md's 1:1 rule binds the ported files, not the new folder.
+- **Quest only.** The client is new C++ in `quest/core/agent/`, outside the scene. The scene gets small hooks, each marked `// AGENT:`.
 - **The service stays off the headset.** The app is a client of the same protocol as the web client (`agents/docs/protocol.md`).
 - **The headset talks only to the service.** Pictures, audio and video all come from the service's address, never from a third party. One host, one token, one place to tunnel later.
 - **The library is part of the mindstorm.** The headset's 100 films and 750 works, its 17 notes and 2 saved trees become existing items and trees in the service. The Scout links to them only when the tie is strong, and keeps bringing new material from its sources.
@@ -60,7 +60,7 @@ Each one ends in a check. Labels: **Now** starts at once, in parallel. **After t
 - **Check.** The tests pass. `quest/tools/check.sh` passes on the new files.
 
 ### WS3. Service changes. Now
-- **Library import.** `npm run import-library` reads `visionos/MindPalace/Resources/ocean.json`, `public/clips/clips.json` and `public/works/works.json` and adds films, works, notes and the 2 saved trees, once and idempotently. Library items stay out of the inbox and out of filing. The service serves the Mac's copies of their pictures for the web client.
+- **Library import.** `npm run import-library` reads `library/ocean.json`, `library/clips/clips.json` and `library/works/works.json` and adds films, works, notes and the 2 saved trees, once and idempotently. Library items stay out of the inbox and out of filing. The service serves the Mac's copies of their pictures for the web client.
 - **Every picture is a service asset.** Video thumbnails and any remote picture a card shows are stored as assets, so a client only ever fetches from the service.
 - **Playable media.** A client can say what it plays (`client` message: `{media: {embeds: false, files: ["mp4", "webm", "mp3"]}}`). While a client that cannot embed is connected, the Scout prefers videos with a direct file (for example the Internet Archive) and keeps `data.mediaUrl` on every playable item.
 - **Check.** `npm test` and `npx tsc --noEmit` pass. A Scout run with a library loaded links to a library film only for a strong tie and still brings new picks.

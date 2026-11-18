@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Shell.swift.
+// The shell of dust round the room: every piece of the library, far off, that a look brings near.
 #pragma once
 #include <memory>
 #include <optional>
@@ -40,10 +40,10 @@ private:
     std::vector<float> grown;                   // how large each picture is now
     std::optional<Vec3> aim;                    // where the growing is centred: it trails the head
     int stirring = 0;                           // pictures still on their way to a size
-    std::vector<uint8_t> swollen;               // NOTE(port): added for Quest's sound: the pieces whose swelling has been told of (`swelled`)
+    std::vector<uint8_t> swollen;               // for the sound: the pieces whose swelling has been told of (`swelled`)
     std::set<int> out;
     std::optional<Material> material;
-    // NOTE(port): `dust` in the Swift, beside the static `dust` (how many specks). C++ can't have both under one name.
+    // The dust's entity, beside the static `dust` (how many specks). C++ can't have both under one name.
     EntityRef dustEntity;
     std::vector<Vec3> rest;                     // each film's place before any stir
     std::vector<float> seeds;
@@ -51,7 +51,7 @@ private:
 
 public:
     float shift = 0;
-    // NOTE(port): added for Quest, whose ocean is heard (the Swift app has no sounds): the pieces that
+    // For the ocean's sound: the pieces that
     // began to swell in the last `look`, for a glint each, and where the swelling is centred.
     std::vector<int> swelled;
     std::optional<Vec3> aimed() const { return aim; }
@@ -59,10 +59,9 @@ public:
     static constexpr float speckWidth = 0.085f; // m: a film at 1, 4.2 m off, about 1.2 degrees
     // Each of these can be tried at launch: `-oceanRest 0.5 -gazeZoom 1.2 -gazeCone 30 -gazeCore 0.4 -gazeEase 3`.
     static float small() { static const float v = asked("oceanRest").value_or(0.4f); return v; }    // how large a piece rests
-    // NOTE(port): changed for Quest, as Kai asked on 2026-11-15: the growth leans to the middle. The piece dead
-    // ahead grows to 2.1 (half again the Swift's 1.4) and the growth falls away from there to the cone's edge,
-    // which is where it was; the Swift grows everything in the inner 40% of the cone to 1.4 alike.
-    // `-gazeCore 0.4 -gazeZoom 1.4` is the Swift's shape.
+    // The growth leans to the middle (Kai, 2026-11-15). The piece dead ahead grows to 2.1 and the growth falls
+    // away from there to the cone's edge. `-gazeCore 0.4 -gazeZoom 1.4` grows everything in the inner 40% of the
+    // cone to 1.4 alike.
     static float large() { static const float v = asked("gazeZoom").value_or(2.1f); return v; }     // and how large where your head points
     static float cone() { static const float v = asked("gazeCone").value_or(20); return v; }        // degrees across: the part of the view that grows
     static float core() { static const float v = asked("gazeCore").value_or(0); return v; }         // the share of the cone, from its middle, that grows all the way
@@ -85,7 +84,7 @@ public:
     /// Things farther off are drawn a little larger, so the far ocean doesn't thin to nothing.
     static float farther(float dist) { return std::pow(dist / 4.2f, 0.7f); }
 
-    /// (`works` is empty when the Swift leaves it out: it stands before `material`, which must be given, so it is always written here.)
+    /// (`works` is empty unless given; it stands before `material`, which must be given, so it is always written.)
     Shell(const Stage& stage, const std::shared_ptr<Art>& art, const std::vector<Clip>& clips, const std::vector<Work>& works,
           const std::optional<Material>& material);
 

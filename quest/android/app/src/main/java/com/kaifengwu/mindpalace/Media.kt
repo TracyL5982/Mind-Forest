@@ -48,8 +48,8 @@ object Media {
 }
 
 /**
- * One video, playing into an OpenGL external texture: what AVPlayer with a
- * VideoMaterial is on visionOS. Made on the native frame thread, which owns
+ * One video, playing into an OpenGL external texture: a film's material.
+ * Made on the native frame thread, which owns
  * the texture; `update` must be called there too.
  *
  * Everything that touches the MediaPlayer runs on this object's own thread,

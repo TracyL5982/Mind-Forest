@@ -1,8 +1,8 @@
 // The Mac's side of canvas.h: CoreGraphics draws, CoreText sets the type.
 // No AppKit: the system font comes from CoreText by size and weight.
 //
-// canvas.h has its own CGPoint, CGSize and CGRect (the ported sources use
-// them as the Swift does), which are not Apple's structs. So that both can
+// canvas.h has its own CGPoint, CGSize and CGRect (the scene's drawing code
+// uses them), which are not Apple's structs. So that both can
 // be seen in this one file, Apple's three are given other names while its
 // headers are read; its functions (CGRectMake, CGContextFillRect…) keep
 // theirs and take and give the renamed structs. Any other Objective-C++
@@ -109,7 +109,7 @@ CFStringRef makeString(const std::string& text) {
 }
 
 /// The attributes CoreText is given: the font, the kern if one was asked for (0 turns pair
-/// kerning off, as it does in UIKit), and a color when the text is about to be drawn.
+/// kerning off), and a color when the text is about to be drawn.
 CFDictionaryRef makeAttributes(CTFontRef font, std::optional<float> kern, CGColorRef color) {
     const void* keys[3];
     const void* values[3];
@@ -298,7 +298,7 @@ ImageRef platform::rasterize(const Canvas& canvas) {
         CGContextSetRGBFillColor(ctx, 0, 0, 0, 1);
         CGContextFillRect(ctx, CGRectMake(0, 0, w, h));
     }
-    // UIKit's coordinates: the origin at the top left, y downward, in points.
+    // The canvas's coordinates: the origin at the top left, y downward, in points.
     CGContextTranslateCTM(ctx, 0, h);
     CGContextScaleCTM(ctx, canvas.scale, -canvas.scale);
     CGContextSetShouldSmoothFonts(ctx, false);

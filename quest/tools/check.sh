@@ -1,5 +1,5 @@
 #!/bin/bash
-# Syntax-checks the ported sources with the Mac's clang: no build, no device.
+# Syntax-checks the scene's sources with the Mac's clang: no build, no device.
 #   tools/check.sh                 every .cpp under core/
 #   tools/check.sh core/ocean/tree.cpp
 cd "$(dirname "$0")/.."

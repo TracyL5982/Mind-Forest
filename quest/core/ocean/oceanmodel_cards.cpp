@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/OceanModel.swift: `// MARK: - Cards`.
+// The ocean's model: the cards.
 #include "oceanmodel.h"
 
 #include "../agent/bridge.h"
@@ -12,7 +12,7 @@
 
 OceanModel::Bodies OceanModel::bodies(const Ref& ref) const {
     if (!art || !catalog) return Bodies{{0.1f, 0.1f}, {0.2f, 0.2f}};
-    // NOTE(port): added for Quest. A piece drawn as a card takes its card's sizes (core/cards).
+    // A piece drawn as a card takes its card's sizes (core/cards).
     if (std::optional<std::string> card = cards::ocean::cardOf(ref)) {
         std::optional<Vec2> small = cards::ocean::smallSize(*card), open = cards::ocean::openSize(*card);
         if (small && open) return Bodies{*small, *open};
@@ -45,7 +45,7 @@ void OceanModel::makeCard(const TreeNode& n, double delay) {
     const Tree& tree = *this->tree;
     Bodies b = bodies(n.ref);
     CardRef c = std::make_shared<CardView>(n, b.small, b.open);
-    seatCard(*c, n);    // NOTE(port): added for Quest (core/cards).
+    seatCard(*c, n);    // core/cards
     Rest at = rest(n, tree);
     c->xy.set(at.xy);
     c->plane.set(float(at.depth));
@@ -74,7 +74,7 @@ void OceanModel::makeCard(const TreeNode& n, double delay) {
         c->emerge.go(1, time, delay, Pace::pop, Ease::arrive);
     }
     Look look = style(n, tree);
-    // NOTE(port): added for Quest. Out of its picture on the cover the tree was, which stands where the
+    // Out of its picture on the cover the tree was, which stands where the
     // cover left it: the card takes the picture's place as it is, and rises from there to its layer. It
     // grows as it travels, so it takes the long settle. (A card that does not show lets its picture go.)
     bool rises = false;
@@ -124,7 +124,7 @@ void OceanModel::makeCard(const TreeNode& n, double delay) {
         buildOpen(*c, n);
     } else if (look.alpha > 0) {
         buildQueue.push_back(n.id);
-        // NOTE(port): added for Quest (see `ghosts`). A picture that never arrives: the renderer draws its
+        // A picture that never arrives: the renderer draws its
         // placeholder for it, after a moment, until `buildSmall` puts the card's own picture in its place.
         if (catalog) {
             static const ImageRef never = [] {
@@ -204,7 +204,7 @@ void OceanModel::buildSmall(CardView& c) {
     std::optional<Piece> piece;
     EntityRef holder = c.smallHolder;
     float radius = 0;                   // its face's round corners, m; the ocean's own pieces are square
-    // NOTE(port): added for Quest. A piece drawn as a card shows the pictures it has, and its open frame and
+    // A piece drawn as a card shows the pictures it has, and its open frame and
     // panel are made with its small face, so they are there before the card can open (core/cards).
     if (std::optional<std::string> card = cards::ocean::cardOf(c.ref)) {
         cardPictures(*card);
@@ -246,7 +246,7 @@ void OceanModel::buildSmall(CardView& c) {
         EntityRef quad = art->quad(*piece);
         holder->addChild(quad);
         c.smallQuad = CardView::SmallQuad{quad, piece->texture};
-        // (`[weak art]` in the Swift: the art lives as long as the model does.)
+        // (The art lives as long as the model does.)
         c.shade = [art = art.get()](const EntityRef& quad, const TextureRef& texture, float dim) { art->shade(quad, texture, dim); };
     }
     if (c.shimmer) holder->addChild(c.shimmer);
@@ -254,7 +254,7 @@ void OceanModel::buildSmall(CardView& c) {
     if (EntityRef rim = art->gazeRim(c.smallBody, gazeMaterial, radius)) holder->addChild(rim);
 }
 
-// NOTE(port): added for Quest (core/cards), with `settleCard` and `composeFrame`.
+// The cards' looks (core/cards), with `settleCard` and `composeFrame`.
 
 namespace {
 /// How long an in-progress card takes to ease to its finished card's size, and the finished card to come up inside it, s.
@@ -398,7 +398,7 @@ void OceanModel::buildStep(CardView& c, int number, const std::string& words) {
 void OceanModel::buildOpen(CardView& c, const TreeNode& node) {
     if (!(art && catalog && !c.openBuilt)) return;
     c.openBuilt = true;
-    // NOTE(port): added for Quest. A piece drawn as a card opens to its card's frame, with the whole panel
+    // A piece drawn as a card opens to its card's frame, with the whole panel
     // behind a window in it, at its top, and the bar that says where the window is while the panel runs on
     // past it (core/cards).
     if (std::optional<std::string> card = cards::ocean::cardOf(c.ref)) {
@@ -505,7 +505,6 @@ void OceanModel::buildOpen(CardView& c, const TreeNode& node) {
 /// then the lines trade places over a moment.
 void OceanModel::buildRows(CardView& c) {
     if (!(art && catalog && tree)) return;
-    /// (The Swift's `(piece: Piece?, pick: Pick?, gap: Float)`.)
     struct Row {
         std::optional<Piece> piece;
         std::optional<Pick> pick;
@@ -531,7 +530,7 @@ void OceanModel::buildRows(CardView& c) {
     if (marks.count(c.id) && !lesson && !service) questions.push_back({"More on what you marked", Pick::askMark(c.id)});
     for (size_t k = 0; k < c.asks.size(); k++) questions.push_back({c.asks[k].question, Pick::ask(c.id, int(k))});
     if (cardGestures) {
-        // NOTE(port): added for Quest (core/cards). Under `-cards` what can be asked stands as pills, one to a line, each as
+        // Under `-cards` what can be asked stands as pills, one to a line, each as
         // wide as its words, with no heading.
         for (const std::pair<std::string, Pick>& q : questions) {
             rows.push_back(Row{art->questionPill(q.first, c.openBody.x), q.second, rows.empty() ? 0 : 0.006f});
@@ -616,7 +615,7 @@ std::optional<int> OceanModel::previousPiece(int id) const {
     return std::nullopt;
 }
 
-// NOTE(port): added for Quest (core/cards), to the end of `pictureNow`.
+// The cards' pictures (core/cards), to the end of `pictureNow`.
 
 // Its why is left to the label on its thread, as the card library's own tree leaves it: said again on the card it
 // would push the picture of nearly half the films to a second page.
@@ -819,11 +818,10 @@ void OceanModel::showFull(CardView& c) {
     c.pictureFull = true;
     int id = c.id;
     const Work& work = catalog->works[c.ref.index];
-    // NOTE(port): a Task in the Swift: the picture is read off the main thread's time and what
-    // follows runs when it is there, a few frames on, the atlas's small picture showing until
-    // then. Here the file is unpacked on a background thread (`Art::fullReady` asks for it), and
-    // `update` calls `finishFull` on the first frame it is there. What follows is as the Swift has
-    // it, the checks that the card is still there and still wants it included.
+    // The picture is read off the frame's time: the file is unpacked on a background thread
+    // (`Art::fullReady` asks for it), the atlas's small picture showing until then, and `update`
+    // calls `finishFull` on the first frame it is there. What follows checks that the card is still
+    // there and still wants it.
     if (!art->fullReady(work)) {
         if (std::find(fullWaiting.begin(), fullWaiting.end(), id) == fullWaiting.end()) fullWaiting.push_back(id);
         touch(time + 0.6);          // keep frames coming until it lands
@@ -963,12 +961,12 @@ void OceanModel::restyle(bool stirring) {
     Ease ease = moving ? Ease::glide : Ease::out;
     bool together = roomy(tree);
     touch(now + double(Pace::step));
-    // (In the order of their ids; a Swift dictionary has none.)
+    // (In the order of their ids.)
     for (const auto& [nid, n] : tree.nodes) {
         const CardRef& held = card(n.id);
         if (!held) continue;
         CardView& c = *held;
-        seatCard(c, n);     // NOTE(port): added for Quest (core/cards).
+        seatCard(c, n);     // core/cards
         Look look = style(n, tree);
         Rest at = rest(n, tree, &frames);
         c.step = n.head && routeIndex(tree, n.id) >= 0 && !tree.folded(n);
@@ -1006,7 +1004,7 @@ void OceanModel::restyle(bool stirring) {
                 buildSmall(c);
                 buildOpen(c, n);
                 showFull(c);
-                // NOTE(port): added for Quest. Each time a card opens, its panel stands at its top (core/cards).
+                // Each time a card opens, its panel stands at its top (core/cards).
                 scrollCard(c, 0);
             }
             c.openMix.go(look.open, now, Pace::grow, Ease::out);
@@ -1074,7 +1072,7 @@ void OceanModel::restyle(bool stirring) {
         // AGENT: a card of the service's whose video is a file plays it, from the service or from where it lies
         // (agent::Bridge::video).
         served = !film && agentBridge && agentBridge->video(current->id);
-        // NOTE(port): added for Quest. A card plays its film where its picture is, so not on a page without it (core/cards).
+        // A card plays its film where its picture is, so not on a page without it (core/cards).
         if (CardRef c = card(current->id); c && c->layout && !c->layout->picture) {
             film = std::nullopt;
             served = false;
@@ -1109,7 +1107,7 @@ void OceanModel::restyle(bool stirring) {
                 }
                 PictureFrame frame = pictureFrame(*c);
                 screen->show(key, url, frame.size, c->openHolder, frame.center);
-                // NOTE(port): added for Quest. An agent's card's poster has round corners, and the film over it takes them (core/cards).
+                // An agent's card's poster has round corners, and the film over it takes them (core/cards).
                 if (cards::ocean::cardOf(c->ref)) {
                     if (std::optional<Piece> round = cards::ocean::corners(*art, frame.size)) screen->cover(art->quad(*round));
                 }

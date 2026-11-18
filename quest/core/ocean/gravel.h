@@ -1,4 +1,4 @@
-// Not a port: added for Quest. The rings on the ground round the foot of a
+// The rings on the ground round the foot of a
 // tree that has been put away (oceanmodel_desk.cpp), so that it reads against
 // what lies behind it.
 //

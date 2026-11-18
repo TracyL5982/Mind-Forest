@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Grid.swift.
+// The grid of dots and lines drawn under a layer.
 #pragma once
 #include <memory>
 #include <optional>

@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Tree.swift.
+// A tree (see tree.h).
 #include "tree.h"
 
 #include <algorithm>
@@ -53,7 +53,7 @@ Vec3 Chroma::linear(Vec2 q) {
     return Vec3::one();
 }
 
-// TreeNode: Codable. Keys are the property names; `ref` is its key, `tone` its raw value, `xy`
+// TreeNode as JSON. Keys are the property names; `ref` is its key, `tone` its raw value, `xy`
 // an array of two, and `parent` and `imp` are left out when there is none.
 std::optional<TreeNode> TreeNode::from(const Json& j) {
     TreeNode n;
@@ -467,7 +467,7 @@ std::vector<int> Tree::place(int id, Vec2 xy) {
 
 /// Half the open card's width, and how far it reaches up and down.
 Tree::Extent Tree::openExtent(const Ref& ref) const {
-    // NOTE(port): added for Quest. A piece drawn as a card is its card, with nothing under it (core/cards).
+    // A piece drawn as a card is its card, with nothing under it (core/cards).
     if (std::optional<std::string> card = cards::ocean::cardOf(ref)) {
         if (std::optional<Vec2> s = cards::ocean::openSize(*card)) return {s->x / 2, s->y / 2, s->y / 2};
     }
@@ -548,7 +548,7 @@ std::vector<int> Tree::freeSlots(int id, bool outer) const {
 
 float Tree::angle(int slot) const {
     int count = int(ringAngles.size());
-    // NOTE(port): every other ring turned by 20 degrees. The Swift has two rings; a service's card can bring more than 18 cards,
+    // Every other ring turned by 20 degrees. A service's card can bring more than 18 cards,
     // which take a third ring and on, each as much wider again (`spot`).
     return ringAngles[size_t(slot % count)] + ((slot / count) % 2 == 1 ? 20 : 0);
 }
@@ -630,7 +630,7 @@ Vec2 Tree::junction(const std::string& title, const TreeNode& n, const std::vect
 std::vector<int> Tree::grow(int id) {
     const TreeNode* found = find(nodes, id);
     if (!found) return {};
-    TreeNode n = *found;        // as it is now: what is added below is not in this copy, as in the Swift
+    TreeNode n = *found;        // as it is now: what is added below is not in this copy
     std::vector<Offer> offers = catalog->offers(n.ref, held());
     std::vector<int> added;
     // Same reason, side by side (keeping the order the reasons first came in).
@@ -661,7 +661,7 @@ std::vector<int> Tree::grow(int id) {
     for (int i = 0; i < take; i++) {
         slots.push_back(free[size_t(take >= int(near.size()) ? i : int((float(i) + 0.5f) * float(near.size()) / float(take)))]);
     }
-    // NOTE(port): added for Quest. On the welcome tree the way on is always in the same place, on the right
+    // On the welcome tree the way on is always in the same place, on the right
     // and a little up (it is the first thing a lesson's card links to), and the pictures stand clear of it.
     if (walk() && take > 0) {
         static const int others[3][3] = {{4, 4, 4}, {3, 5, 5}, {3, 5, 8}};
@@ -1078,7 +1078,7 @@ void Tree::settle() {
     std::function<void(int)> group = [&](int id) {
         const TreeNode* found = find(nodes, id);
         if (!found) return;
-        TreeNode n = *found;        // as it was: the cards under it are walked from this copy, as in the Swift
+        TreeNode n = *found;        // as it was: the cards under it are walked from this copy
         if (!n.head && !n.children.empty()) {
             for (int r : riders(id)) {
                 if (TreeNode* rider = find(nodes, r)) rider->xy -= n.xy;

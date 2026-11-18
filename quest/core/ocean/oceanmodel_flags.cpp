@@ -1,5 +1,4 @@
-// Port of visionos/MindPalace/Ocean/OceanModel.swift: `// MARK: - Pinches`, `// MARK: - Hands`
-// and `// MARK: - Launch flags, for running it without hands`.
+// The ocean's model: pinches, the hands, and the launch flags for running it without hands.
 #include "oceanmodel.h"
 
 #include <cmath>
@@ -14,9 +13,7 @@
 
 // MARK: - Pinches
 
-// NOTE(port): on visionOS the entity is the one the eyes rest on when the fingers pinch; on the
-// Quest it is the one a hand's ray rests on (input.h). Either way it arrives here, and nothing
-// below knows the difference.
+// The entity is the one a hand's ray rests on when the fingers pinch (input.h).
 
 std::optional<OceanModel::Pick> OceanModel::pick(const EntityRef& entity) const {
     const Entity* e = entity.get();
@@ -63,7 +60,7 @@ void OceanModel::pinchChanged(const EntityRef& entity, Vec3 point, Vec3 start) {
         CardRef c = card(id);
         if (!c) return;
         if (tree && tree->focus() == id && cardGestures) {
-            // NOTE(port): added for Quest (core/cards). Under `-cards` a drag on the open card scrolls it, unless the pen is up
+            // Under `-cards` a drag on the open card scrolls it, unless the pen is up
             // on the card gone into: then it marks it, and never scrolls (`beginMark`). A pinch held still first, with the pen
             // down, asks for more like the card (`holdPress`).
             Press& p = *press;
@@ -85,7 +82,7 @@ void OceanModel::pinchChanged(const EntityRef& entity, Vec3 point, Vec3 start) {
             if (p.claim == Press::Claim::scroll) scrollCard(*c, p.scrollFrom + (onCard(*c, point).y - p.scrollAt.y) * Art::ppm / cards::ocean::openScale);
         } else if (tree && tree->focus() == id) {
             // A drag across the open card marks part of it.
-            // NOTE(port): changed for Quest: only once it is gone into and a tool is picked (`layTools`).
+            // Only once it is gone into and a tool is picked (`layTools`).
             if (!marking && penOn && zoom.target() > 0.5f && length(d) > 0.02f) {
                 markBegin(id, onCard(*c, began), std::nullopt);
                 if (marking) sound("mark_begin");
@@ -157,9 +154,9 @@ void OceanModel::pinchEnded(Vec3 point) {
     case Press::Claim::open:
         break;
     }
-    // NOTE(port): changed for Quest. A pinch is a tap when it never went anywhere, not when it ends where it
+    // A pinch is a tap when it never went anywhere, not when it ends where it
     // began: a line drawn round something comes back to its start, and was taken for a tap on the card (which
-    // closes a card gone into). The Swift asks only how far apart the ends are.
+    // closes a card gone into).
     bool still = std::max(moved, p.reach) < 0.035f;
     // AGENT: a button over a tree counts a pinch that began on it and lets go with the ray still on its target, however far the
     // ray went between, as the guide's buttons do (WS73, WS75). And as theirs do, one let go within about a second with the ray
@@ -238,7 +235,7 @@ void OceanModel::pinchEnded(Vec3 point) {
         break;
     case Pick::Kind::shelf: {
         int uid = p.pick.index;
-        // NOTE(port): changed for Quest: where it stands on the desk is what is kept (`i->spot = spot` in the Swift).
+        // Where it stands on the desk is what is kept.
         if (std::optional<Vec2> plot = carry(uid, p.start, d)) {
             auto i = std::find_if(shelf.begin(), shelf.end(), [&](const Shelved& cover) { return cover.uid == uid; });
             if (i != shelf.end()) {
@@ -314,7 +311,7 @@ void OceanModel::tap(const Pick& pick) {
         }
         stepOut();
         break;
-    // NOTE(port): added for Quest: the two answers to "bring everything here?" (oceanmodel_desk.cpp).
+    // The two answers to "bring everything here?" (oceanmodel_desk.cpp).
     case Pick::Kind::reseat:
         reseat("asked for");
         break;
@@ -327,8 +324,8 @@ void OceanModel::tap(const Pick& pick) {
 
 /// Both hands pinching and spreading, on anything: into the open card, as far as you like.
 void OceanModel::magnifyChanged(float ratio) {
-    // NOTE(port): changed for Quest: nothing. On visionOS the eyes say what both hands are spreading;
-    // here there is no gaze, and a card has only its two sizes (`zoomIn`), so two pinches are just two pinches.
+    // Nothing: there is no gaze to say what both hands are spreading, and a card has only its two sizes
+    // (`zoomIn`), so two pinches are just two pinches.
     if ((true)) return;
     if (!tree) return;
     if (!magnifyBase) magnifyBase = zoom.target();
@@ -353,7 +350,7 @@ void OceanModel::handle(const Hands::Event& event) {
         guideDid("carry", length(event.move));
         break;
     case Hands::Event::Kind::panUndone:
-        // NOTE(port): added for Quest (hands.h): the carry turned out to be a push. The tree goes back, and the guide does not count it.
+        // The carry turned out to be a push. The tree goes back, and the guide does not count it.
         logLine(fmt("[ocean] fist: a carry of %.0f mm taken back, it was a push", double(length(event.move)) * 1000));
         panBy(event.move);
         break;
@@ -367,7 +364,7 @@ void OceanModel::handle(const Hands::Event& event) {
         pressTree(!onWelcomeTree() && !agentBridge);
         break;
     case Hands::Event::Kind::cut:
-        // NOTE(port): changed for Quest: the first slice across a thread marks it for cutting, the second cuts it (oceanmodel_cut.cpp).
+        // The first slice across a thread marks it for cutting, the second cuts it (oceanmodel_cut.cpp).
         Vec3 where = event.to;
         if (std::optional<int> id = threadCrossed(event.from, event.to, &where)) {
             hands->cutLanded();
@@ -396,8 +393,7 @@ std::optional<int> OceanModel::threadCrossed(Vec3 from, Vec3 to, Vec3* at) const
     std::optional<Vec2> a = seen(from), b = seen(to);
     if (!a || !b) return std::nullopt;
     // The stroke, carried a little past the hand both ways.
-    // NOTE(port): changed for Quest (2026-11-15): the Swift carries it half its length back and one and a half on,
-    // from one frame's travel. A stroke here is 60 ms of the blade's point, three times as long, and the place
+    // A stroke is 60 ms of the blade's point (2026-11-15), and the place
     // it cuts is shown on the sheet, so it is carried only a little: it cuts where it is seen to pass.
     Vec2 a2 = *a - (*b - *a) * 0.15f, b2 = *b + (*b - *a) * 0.5f;
     auto crosses = [&](Vec2 p, Vec2 q) -> bool {
@@ -440,14 +436,14 @@ std::optional<int> OceanModel::threadCrossed(Vec3 from, Vec3 to, Vec3* at) const
 /// `-demo` plays the whole flow. `-freshShelf` forgets the kept covers. `-cards` draws the ocean as the agent's
 /// cards, and stands the card library when no brief or cover is asked for.
 void OceanModel::runFlags() {
-    // NOTE(port): `let d = UserDefaults.standard` and `let args = CommandLine.arguments` are both `Flags` (base.h).
+    // The settings and the command line are both read through `Flags` (base.h).
     if (Flags::has("demo")) {
         runDemo();
         return;
     }
     auto at = [this](const std::string& key, std::function<void(OceanModel&)> run) {
         double t = Flags::number(key);
-        // NOTE(port): added for Quest. The log says when each one runs, so a check can tell what came of it.
+        // The log says when each one runs, so a check can tell what came of it.
         if (t > 0) after(t, [this, run, key] {
             logLine("[ocean] -" + key + " runs");
             run(*this);
@@ -455,7 +451,7 @@ void OceanModel::runFlags() {
     };
     int brief = Flags::integer("brief");
     if (brief > 0) after(0.8, [this, brief] { startBrief(brief - 1); });
-    // NOTE(port): added for Quest. `-cards` stands the agent's card library as a tree (core/cards/gallery.h), unless
+    // `-cards` stands the agent's card library as a tree (core/cards/gallery.h), unless
     // `-brief` or `-saved` asks for another. With an agent (`-agent`) the service's trees take the stand, and the
     // library is left out, or hung on the shelf as a cover with `-cardsGallery`.
     bool agent = Flags::string("agent").has_value();
@@ -598,7 +594,7 @@ void OceanModel::runFlags() {
     });
     at("zoomAt", [](OceanModel& m) { m.zoomIn(); });
     at("zoomAgainAt", [](OceanModel& m) { m.zoomIn(); });
-    // NOTE(port): added for Quest: `-armCutAt` marks the first thread for cutting, `-cutAt` then cuts it;
+    // `-armCutAt` marks the first thread for cutting, `-cutAt` then cuts it;
     // `-toolAt` with `-tool words|time|region` takes up a marking tool on the card gone into.
     at("armCutAt", [](OceanModel& m) {
         // (The last one drawn: it is on the layer you work on.)
@@ -610,21 +606,21 @@ void OceanModel::runFlags() {
         if (!line.empty()) m.armCut(child, line[line.size() / 2]);
     });
     at("cutAt", [](OceanModel& m) { m.confirmCut(); });
-    // (`-tool pen` takes the pen up, as before; `-tool eraser` and `-tool send` are the other two. NOTE(port): added for
-    // Quest (core/cards): `-toolAt2` with `-tool2`, and on to 4, pick one again later.)
+    // (`-tool pen` takes the pen up, as before; `-tool eraser` and `-tool send` are the other two. `-toolAt2`
+    // with `-tool2`, and on to 4, pick one again later.)
     for (const char* suffix : {"", "2", "3", "4"}) {
         at(std::string("toolAt") + suffix, [suffix](OceanModel& m) {
             std::string tool = Flags::string(std::string("tool") + suffix).value_or("pen");
             if (m.tree && m.tree->focus()) m.pickTool(*m.tree->focus(), tool == "eraser" ? 1 : tool == "send" ? 2 : 0);
         });
     }
-    // NOTE(port): added for Quest. `-askTimes n` picks the row n times, 0.4 s apart, as an impatient hand would.
+    // `-askTimes n` picks the row n times, 0.4 s apart, as an impatient hand would.
     for (int k = 0; Flags::number("askAt") > 0 && k < std::max(1, Flags::integer("askTimes")); k++) {
         after(Flags::number("askAt") + 0.4 * double(k), [this] {
             if (std::optional<int> id = tree ? tree->focus() : std::nullopt) askGardener(*id, Flags::integer("ask"));
         });
     }
-    // NOTE(port): added for Quest (core/cards). `-scrollAt t` drags the open card's panel by `-scrollBy` (a share of
+    // `-scrollAt t` drags the open card's panel by `-scrollBy` (a share of
     // how far it runs on, 1 if not given) as a hand would, which with the pen up marks it instead; `-holdAt t` holds a
     // pinch still on its first words for 0.6 s and then draws it across them, which with the pen up highlights them;
     // `-tapAt t` pinches it without moving; `-longPinchAt t` holds a pinch still for 0.7 s on the card's middle, or with
@@ -750,7 +746,7 @@ void OceanModel::runFlags() {
     at("outAt", [](OceanModel& m) { m.stepOut(); });
     at("forwardAt", [](OceanModel& m) { m.moveLayer(-1); });
     at("placeAt", [](OceanModel& m) { m.carryOne(); });
-    // NOTE(port): added for Quest. `-carryAt t` carries the cover `-carry <i>` (the first, if not given) along the shelf,
+    // `-carryAt t` carries the cover `-carry <i>` (the first, if not given) along the shelf,
     // drawn `-carryRight` and `-carryUp` metres.
     at("carryAt", [](OceanModel& m) {
         m.carryCoverByFlag(Flags::integer("carry"), m.stage.r * float(Flags::number("carryRight")) + m.stage.u * float(Flags::number("carryUp")));
@@ -767,7 +763,7 @@ void OceanModel::runFlags() {
     });
     at("panAgainAt", [](OceanModel& m) { m.panByFlag(Vec2{float(Flags::number("panAgainX")), float(Flags::number("panAgainY"))}); });
     at("sendAt", [](OceanModel& m) { m.pressTree(true); });
-    // NOTE(port): added for Quest (oceanmodel_desk.cpp): `-reseatAt` brings the scene to where the head
+    // `-reseatAt` brings the scene to where the head
     // is then; `-seatPromptAt` shows the card that offers it, whether or not you have moved.
     at("reseatAt", [](OceanModel& m) { m.reseat("-reseatAt"); });
     at("seatPromptAt", [](OceanModel& m) { m.showSeatPrompt(true); });
@@ -959,7 +955,7 @@ void OceanModel::runDemo() {
     at(1.6, [](OceanModel& m) {
         if (m.tree) m.take(m.tree->current);
     });
-    // (Into the card, a look, and out again: the Swift's demo goes in by two sizes.)
+    // (Into the card, a look, and out again.)
     at(1.6, [](OceanModel& m) { m.zoomIn(); });
     at(1.4, [](OceanModel& m) {});
     at(1.6, [](OceanModel& m) { m.zoomIn(); });

@@ -1,4 +1,4 @@
-// Not a port: the visionOS app has no sounds of its own yet. When each of the
+// When each of the
 // ocean's sounds is heard. The sounds themselves are made by
 // quest/sound/synth.py (which says what each is) and mixed by core/audio.h.
 //

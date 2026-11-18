@@ -136,7 +136,7 @@ static void drag(float t, Frame& f) {
 
 // MARK: - Pinch and hold still on the open card: more like it, a layer of its own
 
-// NOTE(port): added for Quest (the agents merge): the long pinch on an open card of the service's, which asks for more
+// The long pinch on an open card of the service's, which asks for more
 // like it (OceanModel::holdPress). A ring fills round the pinch while it is held still; full, new cards come up round it.
 static void hold(float t, Frame& f) {
     f.fade = shown(t, 6.0f);
@@ -168,7 +168,7 @@ static void hold(float t, Frame& f) {
 static void mark(float t, Frame& f) {
     f.fade = shown(t, 6.8f);
     // A card gone into: its picture, and down from its top right corner the pen, the eraser and Send.
-    // NOTE(port): changed for Quest (the agents merge): all three, where the card has them (`layTools`).
+    // All three, where the card has them (`layTools`).
     Vec3 c{0.0f, 0.045f, -0.14f};
     float w = 0.25f, h = 0.165f;
     f.card(c, X, Y, w, h, 0.01f, 0.0016f, white, 0.8f, 0.06f);

@@ -216,7 +216,7 @@ void Json::write(std::string& out, bool pretty, int depth) const {
         if (std::isfinite(number_) && number_ == std::floor(number_) && std::fabs(number_) < 1e15) {
             snprintf(buf, sizeof buf, "%lld", (long long)number_);
         } else {
-            // Short, and exact for a float: what Swift's JSONEncoder writes for Float values.
+            // Short, and exact for a float: the fewest digits that read back as the same float.
             snprintf(buf, sizeof buf, "%.9g", std::isfinite(number_) ? number_ : 0.0);
         }
         out += buf;

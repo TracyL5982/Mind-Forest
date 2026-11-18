@@ -1,4 +1,4 @@
-// NOTE(port): added for Quest (core/cards). What the pen (`layTools`) marks on an open card of the agent service's: highlights
+// What the pen (`layTools`) marks on an open card of the agent service's: highlights
 // behind words and lines over the rest, kept with the card by the service (agents/docs/protocol.md, Edits).
 //
 // A highlight is words of one run of the content's text, found again by its words and which of their appearances it is.

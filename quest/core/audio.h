@@ -1,5 +1,5 @@
 // Sound: a small mixer for the ocean's own sounds (not a film's: that is the
-// VideoPlayer's). Not a port: the visionOS app has no sounds of its own yet.
+// VideoPlayer's).
 //
 // The sounds are files made by quest/sound/synth.py: "sounds/manifest.json"
 // names each one, how loud it is played and whether it is a loop, and

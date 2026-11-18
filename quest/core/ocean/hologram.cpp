@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Hologram.swift.
+// The small tree at your hand (see hologram.h).
 #include "hologram.h"
 
 #include <algorithm>
@@ -227,9 +227,8 @@ void Hologram::draw(double now) {
 // MARK: - Drawing, shared with a tree's cover
 
 void Hologram::branches(const std::vector<Node>& nodes, float thick, const std::function<std::optional<Place>(int)>& shown, Pen& pen) {
-    // NOTE(port): changed for Quest (2026-11-16, "a weird gap between segments", "more tree-like"). The Swift draws a
-    // ribbon of its own up to each card, rising straight out of the one before and bending over at its end, so where
-    // one hands over to the next the line kinks and both glows end square. Here the tree is drawn in limbs: the
+    // (2026-11-16, "a weird gap between segments", "more tree-like".) A ribbon of its own up to each card would kink
+    // where one hands over to the next, and both glows would end square. So the tree is drawn in limbs: the
     // trunk runs up through the card that carries the most of the tree at each fork, and every other branch leaves
     // its limb at an angle and is a limb of its own. A limb is one ribbon, smooth through its cards, thinning as
     // it climbs, its glow fading in where it leaves and out at its tip.
@@ -390,7 +389,7 @@ EntityRef Hologram::still(const std::vector<Node>& nodes, float thick, const Mat
     // Each limb starts at a point of its own and takes ten more for each card it runs through: a soft ribbon
     // three across, and a plain one two across. There are no more limbs than cards.
     int vertexCapacity = heads * 11 * 5, indexCapacity = heads * 10 * 18;
-    // (Freed when this returns: the Swift's `defer`.)
+    // (Freed when this returns.)
     std::unique_ptr<LinkVertex[]> vertexStore(new LinkVertex[size_t(vertexCapacity)]);
     std::unique_ptr<uint32_t[]> indexStore(new uint32_t[size_t(indexCapacity)]);
     LinkVertex* vertices = vertexStore.get();

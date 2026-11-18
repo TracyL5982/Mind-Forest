@@ -1,23 +1,16 @@
-// The scene graph: the part of RealityKit the ocean sources use, under the
-// same names, so they port line for line. Nothing here touches OpenGL; the
+// The scene graph: entities, their models and materials, and what the ocean
+// asks of them. Nothing here touches OpenGL; the
 // renderer (render.cpp) reads these objects and keeps its own GPU copies.
 //
-//   Entity / ModelEntity            -> Entity (EntityRef); a model is `entity->model`
-//   ModelComponent                  -> ModelComponent
-//   MeshResource                    -> Mesh (MeshRef)
-//   LowLevelMesh                    -> LowLevelMesh (it is a Mesh)
-//   UnlitMaterial, ShaderGraphMaterial, VideoMaterial -> Material
-//   TextureResource                 -> Texture (TextureRef)
-//   CGImage / UIImage               -> Image (ImageRef)
-//   UIColor                         -> Color
-//   ShapeResource                   -> Shape
-//   components.set(OpacityComponent(opacity: x))   -> entity->opacity = x
-//   components.remove(OpacityComponent.self)       -> entity->opacity.reset()
-//   components.set(CollisionComponent(shapes: s))  -> entity->collision = s
-//   components.remove(CollisionComponent.self)     -> entity->collision.clear()
-//   components.set(InputTargetComponent())         -> entity->inputTarget = true
-//   components.set(Art.gaze / Art.hover)           -> entity->hover = Hover::shader() / Hover::highlight(...)
-//   components.remove(HoverEffectComponent.self)   -> entity->hover = Hover::none()
+//   Entity (EntityRef)              a thing in the scene; its model is `entity->model`
+//   ModelComponent                  a mesh and its materials
+//   Mesh (MeshRef), LowLevelMesh    a mesh, and one written in place
+//   Material                        unlit, the ocean's own shaders, or a film
+//   Texture (TextureRef), Image (ImageRef), Color, Shape
+//   entity->opacity = x, entity->opacity.reset()
+//   entity->collision = s, entity->collision.clear()       what a pointer can land on
+//   entity->inputTarget = true                             it takes pinches
+//   entity->hover = Hover::shader() / Hover::highlight(...) / Hover::none()
 #pragma once
 #include <atomic>
 #include <functional>
@@ -71,11 +64,11 @@ struct Image {
 };
 using ImageRef = std::shared_ptr<Image>;
 
-/// TextureResource. Made from an image; the renderer uploads it on first
+/// A texture. Made from an image; the renderer uploads it on first
 /// use and frees the GPU copy when the last reference goes.
 class Texture {
 public:
-    /// TextureResource(image:options:); `mipmaps` is `.allocateAndGenerateAll`.
+    /// From an image; `mipmaps` makes every smaller size too.
     static std::shared_ptr<Texture> make(const ImageRef& image, bool mipmaps = false);
     ~Texture();
     int width = 0, height = 0;
@@ -96,22 +89,22 @@ using TextureRef = std::shared_ptr<Texture>;
 
 // MARK: - Meshes
 
-/// MeshResource. Positions are in the entity's own space, m. Texture
-/// coordinates follow RealityKit: (0, 0) is the picture's bottom-left
+/// A mesh. Positions are in the entity's own space, m. Texture
+/// coordinates: (0, 0) is the picture's bottom-left
 /// corner and v grows upward, so an image's top row is at v = 1.
 class Mesh {
 public:
     virtual ~Mesh();
-    /// MeshResource.generate(from: [MeshDescriptor]) with positions, textureCoordinates and .triangles(indices).
+    /// A mesh of triangles from positions, texture coordinates and indices.
     static std::shared_ptr<Mesh> generate(std::vector<Vec3> positions, std::vector<Vec2> uvs, std::vector<uint32_t> indices);
-    /// MeshResource.generatePlane(width:height:): upright in XY, facing +Z, centred.
+    /// A plane: upright in XY, facing +Z, centred.
     static std::shared_ptr<Mesh> generatePlane(float width, float height);
-    /// MeshResource.generateBox(size:): centred.
+    /// A box: centred.
     static std::shared_ptr<Mesh> generateBox(Vec3 size);
-    /// MeshResource.replace(with:)
+    /// Replaces what the mesh holds.
     void replace(std::vector<Vec3> positions, std::vector<Vec2> uvs, std::vector<uint32_t> indices);
 
-    /// What the mesh was made from (MeshResource.contents): empty for a LowLevelMesh.
+    /// What the mesh was made from: empty for a LowLevelMesh.
     std::vector<Vec3> positions;
     std::vector<Vec2> uvs;
     std::vector<uint32_t> indices;
@@ -126,7 +119,7 @@ public:
 using MeshRef = std::shared_ptr<Mesh>;
 
 /// LowLevelMesh: vertex and index memory the app writes into directly, a
-/// frame at a time. `MeshResource(from: lowLevelMesh)` is the mesh itself here.
+/// frame at a time. It is a mesh itself.
 class LowLevelMesh : public Mesh {
 public:
     enum class Semantic { position, uv0, uv1 };
@@ -176,8 +169,8 @@ using LowLevelMeshRef = std::shared_ptr<LowLevelMesh>;
 
 class VideoPlayer;
 
-/// Every material the ocean uses, as one value type (materials are structs
-/// in RealityKit too: change a copy, then set it back on the model).
+/// Every material the ocean uses, as one value type (change a copy, then set
+/// it back on the model).
 struct Material {
     enum class Kind {
         unlit,          // UnlitMaterial
@@ -185,7 +178,7 @@ struct Material {
         dust,           // DustMaterial.usda: specks moved in the vertex shader; parameters "Shift", "Center"
         hoverGlow,      // HoverGlowMaterial.usda: warm light, opacity = uv0.x * how strongly it is hovered
         video,          // VideoMaterial(avPlayer:)
-        // NOTE(port): Quest only (the guide's hands). A shape drawn as a line drawing: its edge a line of even
+        // The guide's hands: a shape drawn as a line drawing: its edge a line of even
         // weight, the rest barely there, and what is in front of it covering what is behind. The normal is in
         // uv0 (x, y) and uv1.x; uv1.y is how much of that point is there. Parameters "Line" (the edge's
         // weight, m), "Fill" (how much the body is filled) and "Glow" (how much light gathers toward its edge).
@@ -206,13 +199,13 @@ struct Material {
     bool writesDepth = true;
     /// Kind::line only: its light is added to what is behind and covers none of it, so overlapping colours sum toward white.
     bool additive = false;
-    /// NOTE(port): Quest only (Momo's block). Drawn over whatever it overlaps, as a heads-up display is: seen through,
+    /// Momo's block: drawn over whatever it overlaps, as a heads-up display is: seen through,
     /// after everything else, its depth neither tested nor written; among such things, the farthest first.
     bool onTop = false;
-    /// NOTE(port): Quest only (the hands' pointer and light). Drawn after what is on top, so it shows over that too, and
+    /// The hands' pointer and light: drawn after what is on top, so it shows over that too, and
     /// otherwise as it would be: seen through, and behind whatever stands in front of it in the room.
     bool overOnTop = false;
-    /// ShaderGraphMaterial.setParameter(name:value:): a float is stored in x.
+    /// A shader's parameters by name: a float is stored in x.
     std::map<std::string, Vec4> parameters;
     /// For Kind::video.
     std::shared_ptr<VideoPlayer> video;
@@ -287,7 +280,7 @@ struct Shape {
     BoundingBox bounds() const;
 };
 
-/// HoverEffectComponent. On the Quest there is no system gaze: an entity is
+/// How an entity shows that it is hovered. There is no system gaze: an entity is
 /// "hovered" while a hand ray rests on it (input.cpp), and the renderer
 /// draws the effect.
 struct Hover {
@@ -296,9 +289,9 @@ struct Hover {
     Color color;
     float strength = 1;
     static Hover none() { return {}; }
-    /// HoverEffectComponent(.shader(.default)): the entity's hoverGlow materials read how strongly it is hovered.
+    /// The entity's hoverGlow materials read how strongly it is hovered.
     static Hover shader() { return {Kind::shader, {}, 1}; }
-    /// HoverEffectComponent(.highlight(.init(color:strength:)))
+    /// A highlight of a colour and a strength.
     static Hover highlight(Color color, float strength) { return {Kind::highlight, color, strength}; }
 };
 
@@ -309,9 +302,9 @@ using EntityRef = std::shared_ptr<Entity>;
 
 class Entity : public std::enable_shared_from_this<Entity> {
 public:
-    /// Entity()
+    /// An empty entity.
     static EntityRef make();
-    /// ModelEntity(mesh:materials:)
+    /// An entity with a model.
     static EntityRef make(MeshRef mesh, std::vector<Material> materials);
     ~Entity();
 
@@ -328,13 +321,13 @@ public:
     }
 
     std::optional<ModelComponent> model;
-    /// OpacityComponent: fades this entity and everything under it.
+    /// Fades this entity and everything under it.
     std::optional<float> opacity;
-    /// CollisionComponent: empty when it has none.
+    /// What a pointer can land on: empty when it has none.
     std::vector<Shape> collision;
     bool inputTarget = false;
     Hover hover;
-    /// Quest only: the pointer's dot rests on this entity's mesh instead of flying on to whatever is
+    /// The pointer's dot rests on this entity's mesh instead of flying on to whatever is
     /// behind it, though a pinch still passes through to what it would have landed on (input.cpp).
     bool stopsPointer = false;
 
@@ -368,7 +361,7 @@ private:
     Entity() = default;
 };
 
-/// What the immersive space runs: App/PalaceScene.swift's protocol.
+/// What the scene runs: the protocol between the host and the ocean.
 class PalaceScene {
 public:
     virtual ~PalaceScene() = default;
@@ -380,21 +373,21 @@ public:
     /// pinched point is now and where it was when the pinch landed, in world space.
     virtual void pinchChanged(const EntityRef& entity, Vec3 at, Vec3 start) = 0;
     virtual void pinchEnded(Vec3 at) = 0;
-    /// Quest only: the hand a pinch beginning is made with (0 left, 1 right), just before its first `pinchChanged`.
+    /// The hand a pinch beginning is made with (0 left, 1 right), just before its first `pinchChanged`.
     virtual void pinchBegan(int /*hand*/) {}
-    /// Quest only: what the ray of the hand that held a pinch is on as it lets go, just before `pinchEnded`.
+    /// What the ray of the hand that held a pinch is on as it lets go, just before `pinchEnded`.
     virtual void pinchReleasedOver(const EntityRef& /*entity*/) {}
     /// Both hands pinching: how far apart they are now, as a ratio of where they started.
     virtual void magnifyChanged(float ratio) = 0;
     virtual void magnifyEnded() = 0;
-    /// Quest only: whether a hand's ray and dot should not be drawn or used right now (0 left, 1 right),
+    /// Whether a hand's ray and dot should not be drawn or used right now (0 left, 1 right),
     /// because that hand is doing something its fingers do themselves.
     virtual bool pointerHidden(int /*hand*/) { return false; }
-    /// Quest only: a hand's ray has come to rest on something it was not on before (the entity whose hover lights).
+    /// A hand's ray has come to rest on something it was not on before (the entity whose hover lights).
     virtual void pointerLanded(int /*hand*/, const EntityRef& /*entity*/) {}
-    /// How much the room around is dimmed, 0...1 (visionOS: preferredSurroundingsEffect); 0 leaves it alone.
+    /// How much the room around is dimmed, 0...1; 0 leaves it alone.
     virtual float surroundingsDim() { return 0; }
-    /// Quest only: how much of the whole scene shows, 1 as a rule; it goes to 0 and back while the scene
+    /// How much of the whole scene shows, 1 as a rule; it goes to 0 and back while the scene
     /// is brought to where the user now is. The renderer fades the finished picture (Renderer::veil).
     virtual float veil() { return 1; }
 };

@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Content/ClipLibrary.swift and Content/WorkLibrary.swift.
+// The library's films and museum works, as clips.json and works.json list them.
 #pragma once
 #include <memory>
 #include <optional>
@@ -10,21 +10,21 @@
 #include "../vecmath.h"
 #include "../scene.h"
 
-// NOTE(port): a URL is a std::string here: the path of a file, as platform::resourcePath gives
+// A URL is a std::string: the path of a file, as platform::resourcePath gives
 // it ("" when the file isn't there). A library's `folder` is the folder's name among the
 // resources ("clips", "works"), not a path: a file in it is platform::resourcePath(folder + "/" + name).
 
-// NOTE(port): every `from` reads one value as JSONDecoder would and gives nullopt where it
-// would throw (see `decode` in catalog.h).
+// Every `from` reads one value and gives nullopt where it is missing or of the wrong kind (see
+// `decode` in catalog.h).
 
-// MARK: - ClipLibrary.swift
+// MARK: - ClipLibrary
 
 // The film scenes, built by library/tools/clips/build.py into library/clips and
 // bundled as the "clips" folder: clips.json, atlas.mp4 (every 4 s loop in one
 // grid video), and full/<id>.mp4 (30 s clips with sound).
 
 struct ClipTag {
-    std::string short_;         // NOTE(port): `short` in the Swift and in clips.json; a C++ keyword
+    std::string short_;         // `short` is a C++ keyword, hence the underscore.
     std::string headline;
     std::string description;
     static std::optional<ClipTag> from(const Json& j);
@@ -51,7 +51,7 @@ struct Clip {
     std::vector<int> tile;      // x, y, w, h in atlas pixels, top-left origin
     FullClipInfo full;
     ClipTag tag;
-    /// NOTE(port): added for Quest. What the service's library import says of a film besides (core/cards/pieces.h).
+    /// What the service's library import says of a film besides (core/cards/pieces.h).
     std::vector<std::string> genres;
     std::string description;
     std::string videoid;
@@ -92,7 +92,7 @@ public:
 /// Dot color is the film's genre, in pigments from the watercolor reference.
 Color genreColor(const std::string& genre);
 
-// MARK: - WorkLibrary.swift
+// MARK: - WorkLibrary
 
 // The museum works, built by scripts/works into public/works and bundled as
 // the "works" folder: works.json, atlas.jpg (every work small, in one
@@ -104,7 +104,7 @@ struct Work {
     std::string id;             // the museum and its own number, e.g. "met-436535"
     std::string museum;         // as shown, e.g. "The Met"
     std::string title;
-    std::string short_;         // a few words, for a small card. NOTE(port): `short` in the Swift and in works.json; a C++ keyword
+    std::string short_;         // a few words, for a small card (`short` in works.json, a C++ keyword)
     std::string maker;          // may be empty: much of the world's making is unsigned
     std::string date;           // as the museum writes it, e.g. "ca. 1889"
     int year = 0;               // the earliest it can be; BCE is negative
@@ -148,6 +148,6 @@ private:
     WorkLibrary();
 };
 
-// The works' manifest carries tags (OceanTag, from Catalog.swift), and the catalog holds clips
+// The works' manifest carries tags (OceanTag, from catalog.h), and the catalog holds clips
 // and works: each of the two headers needs the other, so each brings the other in.
 #include "catalog.h"

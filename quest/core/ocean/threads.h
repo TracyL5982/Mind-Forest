@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Threads.swift.
+// The threads between cards.
 #pragma once
 #include <memory>
 #include <optional>

@@ -1,4 +1,4 @@
-// Not a port: added for Quest (see desk.h).
+// See desk.h.
 #include "desk.h"
 
 #include <algorithm>

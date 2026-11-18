@@ -1,15 +1,13 @@
-// Hand rays and pinches: what stands in on the Quest for visionOS's
-// look-and-pinch. The Quest 3 does not track eyes, so each hand aims a ray
+// Hand rays and pinches. The Quest 3 does not track eyes, so each hand aims a ray
 // (the system's own aim pose) and a pinch of that hand acts on what its ray
-// rests on. What the scene is told is what PalaceView.swift's gestures told
-// it on visionOS:
+// rests on. What the scene is told:
 // - DragGesture(minimumDistance: 0).targetedToAnyEntity(): `pinchChanged`
 //   from the moment a pinch lands on an entity and each time the hand moves,
-//   then `pinchEnded`. As on visionOS, the pinched point follows the hand's
+//   then `pinchEnded`. The pinched point follows the hand's
 //   own movement, not the ray's swing.
 // - MagnifyGesture(): both hands pinching, `magnifyChanged` with how far
 //   apart they are against where they started, then `magnifyEnded`.
-// - HoverEffectComponent: the entity a ray rests on is hovered; the renderer
+// - Hover: the entity a ray rests on is hovered; the renderer
 //   draws the effect from `Entity::hovered`.
 #pragma once
 #include <memory>

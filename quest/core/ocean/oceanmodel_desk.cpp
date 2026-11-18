@@ -1,4 +1,4 @@
-// Not a port: added for Quest. Nothing here is in OceanModel.swift.
+// 
 //
 // The desk: where the scene sits, what stands on the desk and where, and
 // bringing the whole scene to where you are when you have turned or moved
@@ -49,7 +49,7 @@ Vec2 OceanModel::trayPlot() const {
 }
 
 float OceanModel::briefsEl() const {
-    // Where the Swift has them, 19 degrees down and 1.25 m off. While the forest stood near and low they
+    // 19 degrees down and 1.25 m off. While the forest stood near and low they
     // had to stand above its tops; now it begins further off than they are and rises past eye level, and
     // they stand before its feet, over the desk.
     return -19;

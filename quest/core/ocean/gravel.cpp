@@ -1,4 +1,4 @@
-// Not a port: added for Quest (see gravel.h).
+// See gravel.h.
 #include "gravel.h"
 
 #include <algorithm>

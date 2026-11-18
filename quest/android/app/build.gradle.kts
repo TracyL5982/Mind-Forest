@@ -20,7 +20,7 @@ android {
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
-        // The same identifier as the visionOS ocean target.
+        // The app's identifier.
         applicationId = "com.kaifengwu.mindpalace.ocean"
         // -PappSuffix=.agents installs a second copy beside the first, with its own files and media
         // (a build signed on another machine cannot be installed over the first without removing it).
@@ -53,7 +53,7 @@ android {
     }
 
     buildTypes {
-        // Optimized even in debug, as the visionOS project is: hundreds of
+        // Optimized even in debug: hundreds of
         // cards and curves are updated every frame, too slow unoptimized.
         debug {
             externalNativeBuild { cmake { arguments += "-DCMAKE_BUILD_TYPE=RelWithDebInfo" } }

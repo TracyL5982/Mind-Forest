@@ -1,4 +1,4 @@
-// Not a port: added for Quest. Where you sit, the desk in front of you, and
+// Where you sit, the desk in front of you, and
 // where things stand on it.
 //
 // The scene used to stand wherever the head was and faced at launch. Now it

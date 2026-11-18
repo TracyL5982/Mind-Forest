@@ -1,6 +1,6 @@
-// Work done off the frame thread: where the Swift starts a Task to read a
-// file, the port hands the slow part to one background thread and runs what
-// follows on the frame thread at the start of a later frame.
+// Work done off the frame thread: to read a file, the slow part goes to one
+// background thread, and what follows runs on the frame thread at the start
+// of a later frame.
 #pragma once
 #include <functional>
 

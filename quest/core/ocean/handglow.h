@@ -1,4 +1,4 @@
-// Not a port: there is nothing like it in the visionOS app. Light drawn on
+// Light drawn on
 // the hands themselves, in the small tree's language (soft lines, rings,
 // orbs), so that a gesture shows what it is doing where the hand is:
 //

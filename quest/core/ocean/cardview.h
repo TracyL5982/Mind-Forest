@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/CardView.swift.
+// A card as the scene shows it: its small and open faces, its film, and how it moves.
 #pragma once
 #include <algorithm>
 #include <functional>
@@ -18,10 +18,10 @@
 #include "art.h"
 #include "bend.h"
 
-/// NOTE(port): added for Quest. How far the open face stands in front of the small one, m (see the constructor).
+/// How far the open face stands in front of the small one, m (see the constructor).
 constexpr float openLift = 0.0015f;
 
-/// NOTE(port): added for Quest (core/cards). What the user marked on a service card with the pen, as the scene draws it.
+/// What the user marked on a service card with the pen, as the scene draws it.
 struct CardEdit {
     enum class Kind { highlight, stroke, stretch };
     std::string id;
@@ -71,7 +71,6 @@ public:
     Tween<float> solid{0.f};            // its thread: 0 dashed (suggested) … 1 solid (confirmed)
     Tween<float> onPath{0.f};           // its thread: 1 when it is part of the path to the focus
     /// The small face's one picture, so it can be shown dimmer.
-    /// (The Swift's `(entity: ModelEntity, texture: TextureResource)`.)
     struct SmallQuad {
         EntityRef entity;
         TextureRef texture;
@@ -86,7 +85,7 @@ public:
     Tween<float> emerge{0.f};           // 0 at its source … 1 in the tree
     Tween<Vec3> drag{Vec3::zero()};
     Tween<Vec2> nudge{Vec2::zero()};    // moved aside, out from under the open card
-    // NOTE(port): `float` in the Swift; a C++ keyword.
+    // `float` is a C++ keyword, hence the underscore.
     Tween<float> float_{0.f};           // how far it stands off its sheet, in steps: a condensed group floats
     Tween<Vec3> tint{Vec3::repeating(1)};   // its branch's colour, linear: for its thread and its group's glass
     // Where the last frame put it, for the glass under its group.
@@ -95,7 +94,7 @@ public:
     float lift = 0;                     // m off that sheet
     Vec3 source = Vec3::zero();         // where it comes from, and goes back to
     float sourceScale = 0.2f;
-    // NOTE(port): added for Quest. A card that rises out of a picture on a put-away tree's cover takes
+    // A card that rises out of a picture on a put-away tree's cover takes
     // that picture's place: it is there whole from its first moment (not faded in as it leaves), exactly
     // the picture's size, and turned as the picture was, coming round to its layer on the way. Unset
     // again once it has arrived.
@@ -104,7 +103,7 @@ public:
     double goneAt = std::numeric_limits<double>::infinity();
     std::optional<int> home;            // its film's or work's place in the ocean
     EntityRef picture;                  // an open work's picture
-    // NOTE(port): added for Quest (core/cards). An open card's frame; the panel that scrolls in its window, and the bar
+    // An open card's frame; the panel that scrolls in its window, and the bar
     // that says where. The service's cards also have the ring round a pinch held still, and the user's edits, made with the
     // pen and kept with the card, drawn as one see-through amber mesh behind the words and one white mesh of lines, both
     // cut to the window.
@@ -129,7 +128,7 @@ public:
         float tall = 0;
     };
     Content content;
-    // NOTE(port): added for Quest (core/cards). A card whose look the agents are still choosing: the holder its small
+    // A card whose look the agents are still choosing: the holder its small
     // face is drawn in, the soft light that runs across it, and, once its finished card has come, how it eases to
     // that card's size under it (OceanModel::settleCard).
     EntityRef shape;
@@ -156,7 +155,7 @@ private:
     float shownGlow = -1;
 
 public:
-    /// NOTE(port): added for Quest. Its glows, to tell them apart in a look at what is drawn (`OceanModel::depthAudit`).
+    /// Its glows, to tell them apart in a look at what is drawn (`OceanModel::depthAudit`).
     const std::vector<EntityRef>& glowPieces() const { return glows; }
     std::vector<Ask> asks;              // the questions offered beside it when open
     std::string rowsKey;                // what the column under it says now
@@ -250,8 +249,7 @@ public:
 private:
     Material material;
     EntityRef entity;
-    // NOTE(port): the Swift keeps `endObserver`, its place in NotificationCenter. Here the player
-    // itself calls back (`didPlayToEnd`), so there is nothing to keep.
+    // The player itself calls back (`didPlayToEnd`), so there is nothing to keep.
 
 public:
     std::optional<int> film;
@@ -259,7 +257,7 @@ public:
     explicit Screen(bool muted);
 
     /// The stretch of the film that plays, when a part of it is marked (seconds).
-    /// (`ClosedRange<Double>` in the Swift: `a...b` is `Screen::Span{a, b}`.)
+    /// (From `a` to `b`: `Screen::Span{a, b}`.)
     struct Span {
         double lowerBound = 0;
         double upperBound = 0;
@@ -274,7 +272,7 @@ public:
 
     void hide();
 
-    // NOTE(port): added for Quest. Something drawn just in front of the film, which shows and goes with it:
+    // Something drawn just in front of the film, which shows and goes with it:
     // the round corners of an agent's card's poster (core/cards).
     void cover(const EntityRef& e);
 
@@ -290,7 +288,7 @@ public:
     bool playing() const { return film.has_value(); }
 
 private:
-    // NOTE(port): when `hide` wants the player's film dropped (0.15 s after it), on the clock
-    // `mediaTime()`: see `hide` and `update`. The Swift leaves this to DispatchQueue.main.asyncAfter.
+    // When `hide` wants the player's film dropped (0.15 s after it), on the clock `mediaTime()`: see `hide`
+    // and `update`.
     std::optional<double> dropAt;
 };

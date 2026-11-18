@@ -66,8 +66,8 @@ public:
     static constexpr float radius = 2;                  // the ring's outer radius
     static constexpr float innerFraction = 0.2f;        // the band's width, of the radius
     static constexpr int points = 32;                   // round each rim
-    // NOTE(port): the undulation is AgentRing.ts's own (its README: "Quiet/Loud Speed 0.15 / 1.2", Loud Distortion 7,
-    // noise scale 0.5), not Scene.scene's 12 and 1 the port first took. Kai, 2026-11-17: Momo looked "a bit unhinged - the
+    // The undulation is AgentRing.ts's own (its README: "Quiet/Loud Speed 0.15 / 1.2", Loud Distortion 7,
+    // noise scale 0.5), not Scene.scene's 12 and 1. Kai, 2026-11-17: Momo looked "a bit unhinged - the
     // undulations are too large, and too fast"; match the reference's "gentle, spirited undulation".
     static constexpr float noiseScale = 0.5f;
     static constexpr float zGap = 0.1f;                 // between the three rings

@@ -1,33 +1,20 @@
-// Drawing text and shapes into a picture: what stands in for UIKit drawing
-// (UIGraphicsImageRenderer, UIRectFill, UIBezierPath, NSString drawing,
-// CGContext, TextKit) in the ported sources, under names close to UIKit's so
-// the drawing code reads like the Swift.
+// Drawing text and shapes into a picture, through calls named as the common
+// drawing interfaces name them (UIGraphicsImageRenderer, UIRectFill,
+// UIBezierPath, string drawing, CGContext).
 //
-//   CGFloat                                   -> float
-//   CGPoint / CGSize / CGRect                 -> the same names, here (float)
-//   UIFont.systemFont(ofSize:weight:)         -> Font::systemFont(size, Font::Weight::semibold)
-//   font.lineHeight / font.pointSize          -> font.lineHeight() / font.pointSize
-//   [NSAttributedString.Key: Any]             -> TextAttributes {font, foregroundColor, kern, paragraphStyle}
-//   NSMutableParagraphStyle                   -> ParagraphStyle
-//   UIGraphicsImageRendererFormat             -> the same name
-//   UIGraphicsImageRenderer(size:format:).image { ctx in … }
-//                                             -> UIGraphicsImageRenderer(size, format).image([&](Canvas& ctx) { … })
-//   CGContext (and $0.cgContext)              -> Canvas&
-//   color.setFill()                           -> setFill(color)
-//   UIRectFill(rect)                          -> UIRectFill(rect)
-//   UIBezierPath(ovalIn: r).fill()            -> UIBezierPath::ovalIn(r).fill()
-//   (s as NSString).size(withAttributes: a)   -> stringSize(s, a)
-//   (s as NSString).boundingRect(with: size, options: o, attributes: a, context: nil)
-//                                             -> stringBoundingRect(s, size, o, a)
-//   (s as NSString).draw(at: p, withAttributes: a)
-//                                             -> drawString(s, p, a)
-//   (s as NSString).draw(with: rect, options: o, attributes: a, context: nil)
-//                                             -> drawString(s, rect, o, a)
-//   UIImage(cgImage: image).draw(in: rect)    -> drawImage(image, rect)
-//   image.cropping(to: rect)                  -> cropping(image, rect)
-//   NSTextStorage + NSLayoutManager + NSTextContainer
-//                                             -> TextLayout
-//   CIImage…applyingGaussianBlur(sigma:)      -> gaussianBlur(image, sigma)
+//   CGPoint / CGSize / CGRect                 points, sizes and rectangles (float)
+//   Font::systemFont(size, weight)            a font; font.lineHeight(), font.pointSize
+//   TextAttributes {font, foregroundColor, kern, paragraphStyle}, ParagraphStyle
+//   UIGraphicsImageRenderer(size, format).image([&](Canvas& ctx) { … })
+//                                             a picture drawn by the calls in the block
+//   Canvas&                                   what they draw into
+//   setFill(color), UIRectFill(rect), UIBezierPath::ovalIn(r).fill()
+//   stringSize(s, a)                          one line's size
+//   stringBoundingRect(s, size, o, a)         wrapped text's size
+//   drawString(s, p, a), drawString(s, rect, o, a)
+//   drawImage(image, rect), cropping(image, rect)
+//   TextLayout                                laid-out text, lines and where each character is
+//   gaussianBlur(image, sigma)
 //
 // How it works. A Canvas does not draw: it writes each call into a small list
 // of commands, and `image()` hands the whole list to the host, which draws it
@@ -39,15 +26,15 @@
 //
 // The fonts are the host's own (SF on the Mac, Roboto on the Quest), so the
 // same words are not the same width on both. Nothing may assume a text's
-// size: measure it, as the Swift does.
+// size: measure it.
 //
-// Coordinates are UIKit's: points, the origin at the top left, y downward.
+// Coordinates are points, the origin at the top left, y downward.
 //
 // Strings and character indices. Strings are std::string, UTF-8. A character
-// index or range (what the Swift takes from NSString and NSRange) counts
-// UTF-16 code units, exactly as NSString does, on both hosts. Code that walks
+// index or range counts
+// UTF-16 code units, on both hosts. Code that walks
 // a string by index turns it into a std::u16string first with `utf16()`,
-// indexes that as the Swift indexes its NSString, and turns what it cut out
+// indexes that, and turns what it cut out
 // back with `utf8()`.
 #pragma once
 #include <cmath>
@@ -102,7 +89,7 @@ struct CGRect {
 
 // MARK: - Strings
 
-/// A string as NSString holds it, and back.
+/// A string as UTF-16 code units, and back.
 std::u16string utf16(const std::string& s);
 std::string utf8(const std::u16string& s);
 /// String.uppercased(): Latin (with its accents), Greek and Cyrillic; anything else is left as it is.
@@ -117,7 +104,7 @@ bool punctuationCharacters(char32_t c);
 /// String.trimmingCharacters(in:), for a set given as a test.
 std::u16string trimmingCharacters(const std::u16string& s, const std::function<bool(char32_t)>& in);
 
-/// NSRange: UTF-16 code units.
+/// A range of UTF-16 code units.
 struct CharacterRange {
     int location = 0, length = 0;
 };
@@ -133,8 +120,8 @@ struct FontMetrics {
 struct Font {
     /// UIFont.Weight
     enum class Weight { regular, medium, semibold, bold };
-    /// Added for Quest: the agent's cards are set as the web client sets them, a few lines in a serif
-    /// ('Iowan Old Style', Georgia), some in italics, and code fixed-width. The ported sources only ever ask for `system`.
+    /// The agent's cards are set as the web client sets them, a few lines in a serif
+    /// ('Iowan Old Style', Georgia), some in italics, and code fixed-width. The ocean's own cards only ever ask for `system`.
     /// `display` is Fraunces (72pt Soft Light, and its italic), for the lettering that greets you after the walk. Its two
     /// files are kept with the media (fonts/); without them the platform's own serif stands in.
     enum class Design { system, serif, mono, display };
@@ -189,10 +176,10 @@ struct ParagraphStyle {
 };
 
 /// A string's attributes: `[.font: f, .foregroundColor: c, .kern: k, .paragraphStyle: style]`.
-/// `kern` is nullopt when the Swift leaves `.kern` out, and the font then spaces its letters as it
+/// `kern` is nullopt when no kern is given, and the font then spaces its letters as it
 /// likes. When it is given, that much is added after every character; given as 0, it also turns
 /// the font's own spacing off (pair kerning, and on Apple's system font its tracking), as the
-/// same dictionary does in UIKit: the same words measure a little wider with `.kern: 0` than with
+/// same attributes do elsewhere: the same words measure a little wider with `.kern: 0` than with
 /// no kern at all. So a width measured with one set of attributes holds only for drawing with the same.
 /// `[.font: f, .kern: kern]` is `TextAttributes{.font = f, .kern = kern}`.
 struct TextAttributes {
@@ -202,7 +189,7 @@ struct TextAttributes {
     ParagraphStyle paragraphStyle;
 };
 
-/// NSStringDrawingOptions, to be or-ed together.
+/// String drawing options, to be or-ed together.
 enum StringDrawingOptions : int {
     usesLineFragmentOrigin = 1 << 0,
     truncatesLastVisibleLine = 1 << 5,
@@ -240,16 +227,16 @@ const TextFrame& layoutText(const std::string& string, const TextAttributes& att
 /// height, kept within the paragraph style's minimum and maximum.
 float textLineHeight(const TextAttributes& attributes);
 
-/// NSString.size(withAttributes:): one line, unwrapped. Not rounded.
+/// One line's size, unwrapped. Not rounded.
 CGSize stringSize(const std::string& string, const TextAttributes& withAttributes);
-/// NSString.boundingRect(with:options:attributes:context:), with `.usesLineFragmentOrigin`: wrapped to
+/// The size of the text with `usesLineFragmentOrigin`: wrapped to
 /// `size.width`. Without `.truncatesLastVisibleLine` it may come out taller than `size`.
 CGRect stringBoundingRect(const std::string& string, CGSize size, int options, const TextAttributes& attributes);
 
 // MARK: - Canvas
 
 /// A picture being drawn. It is a CGContext (the calls below have its names) and, while a
-/// UIGraphicsImageRenderer runs its actions, the "current context" the UIKit calls draw into.
+/// UIGraphicsImageRenderer runs its actions, the "current context" the drawing calls draw into.
 class Canvas {
 public:
     /// CGLineJoin and CGLineCap
@@ -288,7 +275,7 @@ public:
     void strokeEllipse(CGRect in);
     void fillEllipse(CGRect in);
 
-    // What UIKit draws into the current context. The free functions below call these.
+    // What is drawn into the current context. The free functions below call these.
     /// UIRectFill: the fill color put in place of what was there (a see-through color leaves a see-through hole).
     void rectFill(CGRect rect);
     /// UIImage.draw(in:): the whole picture, stretched to the rectangle.
@@ -299,7 +286,7 @@ public:
     /// The finished picture: RGBA8, premultiplied, row 0 at the top, `scale` set. Call it once, at the end.
     ImageRef image();
 
-    /// The canvas the UIKit calls draw into, or nullptr outside a renderer's actions.
+    /// The canvas the drawing calls draw into, or nullptr outside a renderer's actions.
     static Canvas* current();
     /// UIGraphicsPushContext and UIGraphicsPopContext
     static void push(Canvas* canvas);
@@ -341,7 +328,7 @@ private:
     void put(Op op, Color c);
 };
 
-/// UIGraphicsImageRendererFormat. (UIKit's own default scale is the screen's; the sources always say 1.)
+/// UIGraphicsImageRendererFormat. (The scale is always 1.)
 struct UIGraphicsImageRendererFormat {
     float scale = 1;
     bool opaque = false;
@@ -359,7 +346,7 @@ private:
     UIGraphicsImageRendererFormat format;
 };
 
-// MARK: - UIKit's calls, into the current canvas
+// MARK: - The drawing calls, into the current canvas
 
 /// `color.setFill()`
 void setFill(Color color);
@@ -386,9 +373,9 @@ private:
     std::optional<CGRect> oval;
 };
 
-/// NSString.draw(at:withAttributes:): one line, its top-left corner at `at`.
+/// One line, its top-left corner at `at`.
 void drawString(const std::string& string, CGPoint at, const TextAttributes& withAttributes);
-/// NSString.draw(with:options:attributes:context:), with `.usesLineFragmentOrigin`: wrapped to the
+/// The text with `usesLineFragmentOrigin`: wrapped to the
 /// rectangle's width. With `.truncatesLastVisibleLine`, only the lines that fit its height are drawn,
 /// and the last of them ends in an ellipsis if the string goes on. A paragraph style that truncates
 /// its tail makes it one line.

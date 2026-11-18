@@ -94,7 +94,7 @@ function prose(markdown: string): string {
     .trim();
 }
 
-const DOCS = ['agents/DECISIONS.md', 'agents/README.md', 'README.md', 'agents/docs/protocol.md', 'quest/PORTING.md', 'quest/agent-plan.md'];
+const DOCS = ['agents/DECISIONS.md', 'agents/README.md', 'README.md', 'agents/docs/protocol.md', 'quest/agent-plan.md'];
 
 interface Voice { name: string; make: (text: string, file: string) => Promise<void> }
 

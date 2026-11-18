@@ -43,12 +43,11 @@ Instead: raise `EAGER_SCOUTS` in `src/core/pipeline.ts`.
 Measured on the live model: the Organizer's reply schema had optional keys and open objects, and the model answered a rename with dozens of invented keys ("title Lima", "title Swagger", …) and no title. The rename failed 4 times out of 4. The model client now closes every object, requires every key, and makes optional keys nullable before sending (`strictSchema` in `src/node/model-meta.ts`), then drops the nulls from the reply. The same request then succeeded 4 times out of 4.
 This is fixed at the one place requests leave, so no role can reintroduce it.
 
-## 12. Installed XcodeGen and regenerated the Xcode project
-The Ocean adapter adds five Swift files. `MindPalace.xcodeproj` lists files one by one, so without regenerating it the app would not build at all on your next pull. `xcodegen` is the project's own generator (`visionos/project.yml`) and was not installed on this Mac. I installed it with Homebrew (`brew install xcodegen`, 7.8 MB) and ran `xcodegen generate`. The project file's diff is 38 added lines, all for the five new files.
-Instead: `brew uninstall xcodegen` removes it. The generated project stays valid.
+## 12. (No longer applies)
+This entry was about a client that is not in this repository.
 
-## 13. The Ocean adapter was checked further than the plan promised, but still not built
-The plan said "never compiled". The delegate found a visionOS 2.5 simulator SDK on this Mac and typechecked the whole app against it: only the two errors the app already had on that older SDK. It also ran the real `Tree.swift`, `Catalog.swift` and the bridge on macOS against the fake service, 21 of 21 checks. It has still never been built for visionOS 26 or run on a headset. Voice in the headset is entirely untested.
+## 13. (No longer applies)
+This entry was about a client that is not in this repository.
 
 ## 14. The Scout extends ideas itself and stops collecting links
 
@@ -365,13 +364,11 @@ In a real browser with a fake microphone (`scripts/wake-check.ts`), OpenAI's tra
 
 **Also.** The browser checks from the card library line that dropped a recording or pasted an explainer now ask for a tree first, since a drop starts no tree unless asked (entry 29). The check that opening a card brings nothing compares the card's children before and after, since the Every shape tree now hangs a map under that card.
 
-## 40. One home: the Vision Pro adapter stays out
+## 40. One home: the Quest app and the web client
 
-**Decision.** The merge keeps `visionos/` as the Quest line has it, without the adapter in `visionos/MindPalace/Ocean/Agent/` and its hooks in `OceanModel.swift`, `Notes.swift` and `Info.plist`.
+**Decision.** The service's clients on this line are the Quest app and the web client in `client/`.
 
-**Why.** The Quest line left the adapter out on purpose when the service joined it (1dc37a6, 14 November), and every merge since kept it out. Its `OceanModel.swift` differs from the agents line's by 388 changed lines, so the adapter's hooks do not apply as they were. The Quest app is the final home, and Vision Pro was the prototype.
-
-**To bring it back.** The five files and the hooks are as they were at 088452d. Putting them back means writing the hooks again against the Quest line's `OceanModel.swift` and typechecking with the visionOS 2.5 simulator SDK, since visionOS 26 cannot be built on this Mac.
+**Why.** The Quest app is the final home of the work.
 
 ## 41. Voice: the Conductor answers on the quick model
 
@@ -1069,7 +1066,7 @@ It searched Instagram more often by no more than ten runs a side can show, and i
 
 ## 66. Open cards: Kai's pen, eraser and Send take the edit pencil's place (amends 65)
 
-**Decision.** Merging Kai's quest-port work brought a second way to mark a card. The user chose Kai's: three buttons on a card you have gone into, everywhere, wired to the service. The edit pencil outside the card's top right corner is gone, with its help line ("Long pinch to highlight", "Long pinch to draw") and its "on" mode.
+**Decision.** Merging Kai's quest-project work brought a second way to mark a card. The user chose Kai's: three buttons on a card you have gone into, everywhere, wired to the service. The edit pencil outside the card's top right corner is gone, with its help line ("Long pinch to highlight", "Long pinch to draw") and its "on" mode.
 
 **What stays from 65.** At most three question pills under an open card. A pinch-drag scrolls the card when no tool is up. A pinch held still asks for more like the card, leaning on its highlights, and the card leads a layer of its own. Edits are kept by the service with the card, as `node.edits`, through `addEdit` and `removeEdit`: they come back on any headset, "undo" takes back the last, and handoffs list the highlights. The data gains one kind, the stretch (below).
 

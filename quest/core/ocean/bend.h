@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Bend.swift.
+// Bending a flat card onto the curve of the layer it lies on, and back.
 #pragma once
 #include <array>
 #include <map>
@@ -31,9 +31,9 @@ public:
     /// whenever each was cut. At rest a face's columns are the card's. At full
     /// zoom a column is 7.5 cm of the world, and its flat face is then half a
     /// millimetre off the arc at most.
-    // NOTE(port): changed for Quest. The Swift cuts a piece once, at the card's columns, and bends each point onto
-    // the arc: a panel drawn again after its face grew, or a piece's own edge inside a column, then lies behind
-    // the piece under it, which shows through in stripes. Here columns grow with their face, and `drawn` puts
+    // A piece cut once, at the card's columns, with each point bent onto the arc, would leave a panel drawn again
+    // after its face grew, or a piece's own edge inside a column, behind the piece under it, showing through in
+    // stripes. So columns grow with their face, and `drawn` puts
     // every point on its column's chord.
     static constexpr float column = 0.025f;
 
@@ -92,8 +92,8 @@ private:
 
     /// Enough of a set of shapes to tell it from another.
     ///
-    /// NOTE(port): a `[Float]` in the Swift, empty for no shapes. It is made for everything on a
-    /// card that can be picked each time the card is looked over, so here it is nine numbers held
+    /// It is made for everything on a card that can be picked each time the card is looked over, so it is
+    /// nine numbers held
     /// in place, all zero for no shapes (the first is otherwise the count, never zero).
     using Mark = std::array<float, 9>;
 
@@ -151,7 +151,7 @@ private:
 
     static LowLevelMeshRef lowMesh(const std::vector<Vec2>& uvs);
 
-    /// What `cut` gives back: the Swift's `(points: [SIMD3<Float>], uvs: [SIMD2<Float>])`.
+    /// What `cut` gives back.
     struct Cut {
         std::vector<Vec3> points;
         std::vector<Vec2> uvs;

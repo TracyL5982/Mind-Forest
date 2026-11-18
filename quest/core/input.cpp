@@ -216,7 +216,7 @@ Input::Pointer Input::read(int which) const {
 void Input::update(const EntityRef& root, const std::optional<Mat4>& head, float dt) {
     static const double fixedGain = Flags::number("dragGain");
     // A pinched card follows the system's ray, which the headset steadies itself; `-dragBy hand` has it
-    // follow the hand's own movement instead (visionOS's way, and what `-dragGain` then scales).
+    // follow the hand's own movement instead (what `-dragGain` then scales).
     static const bool byRay = Flags::string("dragBy").value_or("ray") != "hand";
     bool was[2] = {hands[0].pinching, hands[1].pinching};
     for (int i = 0; i < 2; i++) {
@@ -253,7 +253,7 @@ void Input::update(const EntityRef& root, const std::optional<Mat4>& head, float
                     held = h.hit.entity;
                     heldStart = heldAt = h.hit.point;
                     gripStart = h.pointer.grip;
-                    // What is far moves further for the same hand movement, as it does on visionOS.
+                    // What is far moves further for the same hand movement.
                     gain = fixedGain > 0 ? float(fixedGain) : std::min(3.f, std::max(1.f, h.hit.distance / 0.6f));
                     heldDistance = h.hit.distance;
                     aimStart = h.pointer.direction;

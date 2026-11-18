@@ -1,4 +1,4 @@
-// Not a port: there is nothing like it in the visionOS app. What draws one of the guide's gestures
+// What draws one of the guide's gestures
 // (guidehand.h) in the room: its hands as the headset's own hand model in line (Material::ghost), and
 // what they act on in the small tree's language of soft lines, fills and orbs (the line material).
 //

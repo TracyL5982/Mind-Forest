@@ -1,5 +1,5 @@
-// Not a port: there is nothing like it in the visionOS app, where a flat hand swept across a thread
-// cuts it at once. That was hard to find, easy to do by accident and impossible to see coming, so here:
+// Cutting a thread. A flat hand that cut a thread at once would be hard to find, easy to do by accident and
+// impossible to see coming, so:
 //
 // - A hand held as a knife (hands.h: straight, together, on its edge, for a moment) shows as a blade
 //   (handglow.h) in the accent, and its pointer is put away: one line on the hand, and no doubt which.

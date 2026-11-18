@@ -1,5 +1,5 @@
-// Port of visionos/MindPalace/Ocean/OceanModel.swift: `// MARK: - Starting, picking, layers`,
-// `// MARK: - Placing by hand`, `// MARK: - Marking` and `// MARK: - The ocean: peeking and bringing in`.
+// The ocean's model: starting a tree, picking, layers, placing by hand, marking, and peeking
+// into the ocean and bringing in from it.
 #include "oceanmodel.h"
 
 #include "../agent/bridge.h"
@@ -33,9 +33,9 @@ void OceanModel::stand(TreeRef t) {
         if (ao != bo) return ao < bo;
         return a->id < b->id;
     });
-    // NOTE(port): changed for Quest. The Swift makes every card here, in the one frame, each to appear a
-    // little after the last. Making them is what takes the time (each measures its text), and a tree of
-    // forty cards held the headset's frame for two. Here each is given the moment it is due, and they are
+    // Each card is to appear a little after the last. Making them is what takes the time (each measures its
+    // text), and a tree of forty cards made in one frame held the headset's frame for two. So each is given
+    // the moment it is due, and they are
     // made over the next few frames, a few milliseconds' worth at a time and always before they are due
     // (`standMore`): what is seen is the same, card after card.
     standQueue.clear();
@@ -44,7 +44,7 @@ void OceanModel::stand(TreeRef t) {
     for (size_t i = 0; i < order.size(); i++) {
         standQueue.push_back(StandWaiting{order[i]->id, time + 0.02 + double(std::min(int(i), 40)) * Pace::stagger * 0.8});
     }
-    // NOTE(port): added for Quest. Cards that rise out of the pictures of the cover this tree was (see
+    // Cards that rise out of the pictures of the cover this tree was (see
     // `unfold`) are made first and lift off in turn, a beat after the cover begins to leave.
     if (!rising.empty()) {
         std::stable_partition(standQueue.begin(), standQueue.end(), [&](const StandWaiting& w) { return rising.count(w.id) > 0; });
@@ -103,7 +103,7 @@ void OceanModel::whenClear(std::function<void()> next) {
         quietPress = true;          // only making way: the tree that follows is what is heard
         pressTree(false);
         quietPress = false;
-        // NOTE(port): added for Quest: the forest stays down between the tree that goes and the one that comes.
+        // The forest stays down between the tree that goes and the one that comes.
         standPending = true;
         after(double(Pace::press) + 0.25, [this, next = std::move(next)] {
             standPending = false;
@@ -251,8 +251,7 @@ void OceanModel::goTo(int head) {
 /// Into the open card: a pinch on it brings it up until it fills much of
 /// the view; one more lets it back. What hangs from it moves out of its way.
 ///
-/// NOTE(port): changed for Quest: the Swift has a size between (0.45). There are two here, as it
-/// opens and gone into, and gone into is where the card's marking tools are (`layTools`).
+/// There are two sizes, as it opens and gone into, and gone into is where the card's marking tools are (`layTools`).
 void OceanModel::zoomIn() {
     // (On the welcome tree a lesson's card has nothing in it to go into: a pinch on it is the walk's business.)
     if (zoom.target() < 0.5f && tourPinchedOpen()) return;
@@ -392,7 +391,7 @@ void OceanModel::drop(int id, const std::vector<int>& riders, Vec3 d) {
     const TreeNode* found = find(*tree, id);
     CardRef held = card(id);
     if (!found || !held) return;
-    // (A copy, as the Swift's `n` is: the tree is about to move it.)
+    // (A copy: the tree is about to move it.)
     TreeNode n = *found;
     // Along the sheet where the card lies, which curves around you.
     Vec2 delta{dot(d, held->right), dot(d, held->up)};
@@ -432,7 +431,7 @@ void OceanModel::markBegin(int id, Vec2 a, std::optional<Mark::Kind> only) {
         auto note = catalog->notes.find(c.ref.id);
         if (note != catalog->notes.end() && note->second.clip) video = true;
     }
-    // NOTE(port): added for Quest. With a tool picked (`markTool`) the drag makes that kind of mark
+    // With a tool picked (`markTool`) the drag makes that kind of mark
     // wherever on the card it starts, rather than the kind the place it started would suggest.
     if (only) {
         std::vector<Mark::Kind> can = markKinds(c);
@@ -473,7 +472,7 @@ void OceanModel::markBegin(int id, Vec2 a, std::optional<Mark::Kind> only) {
         }
         return;
     }
-    // NOTE(port): added for Quest. A film drawn as a card has words besides its picture, and is marked as a video note is (core/cards).
+    // A film drawn as a card has words besides its picture, and is marked as a video note is (core/cards).
     if (c.ref.kind == Ref::Kind::film && c.layout) video = true;
     if (c.ref.kind == Ref::Kind::film && !c.layout) {
         marking = Marking{id, MarkKind::time(), a, a, std::nullopt, ""};
@@ -530,8 +529,7 @@ void OceanModel::markMove(Vec2 b) {
         break;
     }
     case MarkKind::Kind::region: {
-        // NOTE(port): changed for Quest. The Swift rings the box the drag spans. Here the drag draws, as a
-        // marker does: the line goes where the hand goes (a little steadied), and stays.
+        // The drag draws, as a marker does: the line goes where the hand goes (a little steadied), and stays.
         Ink& ink = inks[m.id];
         if (ink.strokes.empty()) ink.strokes.push_back({});
         std::vector<Vec2>& stroke = ink.strokes.back();
@@ -601,7 +599,7 @@ void OceanModel::drawStretch(CardView& c, float x0, float x1, bool made, double 
     EntityRef holder = c.markHolder;
     std::vector<EntityRef> children = holder->children;
     for (const EntityRef& child : children) child->removeFromParent();
-    // NOTE(port): changed for Quest: the bar is half as thick again, and each end of the stretch has a
+    // The bar is thick, and each end of the stretch has a
     // handle, which is what a later drag takes it by (`markBegin`).
     float y = lo.y + 0.014f;
     EntityRef track = art->swatch(Color::white(0, 1), {picture.size.x, 0.012f}, 0.6f);
@@ -656,7 +654,7 @@ void OceanModel::markEnd() {
     Mark made = *m.made;
     marks[m.id] = made;
     sound("mark_made");
-    // NOTE(port): added for Quest (core/cards): a service card keeps its video's stretch with the service.
+    // A service card keeps its video's stretch with the service.
     if (made.kind == Mark::Kind::time && c.highlights) keepStretch(c, made);
     if (made.kind == Mark::Kind::time && screenNode == m.id) screen->loop(Screen::Span{made.from, made.to});
     buildRows(c);
@@ -678,7 +676,7 @@ void OceanModel::markEnd() {
 
 // MARK: - Marking tools
 
-// NOTE(port): added for Quest; there is nothing like it in the Swift, where a drag on the open card marks it.
+// , where a drag on the open card marks it.
 
 std::vector<Mark::Kind> OceanModel::markKinds(const CardView& c) const {
     if (c.ref.kind == Ref::Kind::film) return {Mark::Kind::time};
@@ -819,14 +817,14 @@ void OceanModel::pickTool(int id, int what) {
     if (!(tree && tree->focus() == id)) return;
     CardRef c = card(id);
     if (what == 1) {
-        // The eraser. NOTE(port): added for Quest (core/cards): on a service card it takes every mark off, at the service
+        // The eraser. On a service card (core/cards) it takes every mark off, at the service
         // too, as one change that one undo brings back.
         if (c && c->highlights) eraseAll(*c); else clearMark(id);
         return;
     }
     if (what == 2) {
         // Send: what is marked is asked about. (A lesson of the welcome tree has nobody to ask: it is come
-        // back out of, which is what its lesson waits for.) NOTE(port): added for Quest (core/cards): on a service
+        // back out of, which is what its lesson waits for.) On a service (core/cards)
         // card it is a conversation with Momo about the marked part, which leads a layer.
         if (!marked(id)) return;
         penOn = false;
@@ -978,7 +976,7 @@ Vec3 OceanModel::peekPoint(int film, float tall) const {
     Vec3 away = home - stage.origin;
     float dist = std::min(2.3f, std::max(1.5f, length(away) * 0.6f));
     Vec3 to = stage.origin + normalize(away) * dist + stage.u * 0.16f;
-    // NOTE(port): added for Quest. Kai, 2026-11-17: "the item sometimes can get obstructed by a tree sitting on the
+    // Kai, 2026-11-17: "the item sometimes can get obstructed by a tree sitting on the
     // table - fly them higher so that we make sure that they can be clicked on". Its lower edge goes above the line
     // from your eyes, and from your hand under them, over the top of every tree put away that stands nearer than it
     // and not far to one side: seen past them, and pinched past them.
@@ -1148,12 +1146,12 @@ void OceanModel::bringIn(int film) {
     }
 }
 
-// NOTE(port): the two below are not in the Swift (see the end of oceanmodel.h).
+// The two below write numbers for the log (see the end of oceanmodel.h).
 
 namespace {
 
-/// A number as Swift writes one out: the fewest digits that say it exactly, and never without a point.
-std::string swiftDouble(double v) {
+/// A number written out with the fewest digits that say it exactly, and never without a point.
+std::string shortestDouble(double v) {
     std::string out;
     for (int digits = 1; digits <= 17; digits++) {
         out = fmt("%.*g", digits, v);
@@ -1163,7 +1161,7 @@ std::string swiftDouble(double v) {
     return out;
 }
 
-std::string swiftFloat(float v) {
+std::string shortestFloat(float v) {
     std::string out;
     for (int digits = 1; digits <= 9; digits++) {
         out = fmt("%.*g", digits, double(v));
@@ -1175,24 +1173,23 @@ std::string swiftFloat(float v) {
 
 }  // namespace
 
-/// How Swift writes a mark out in a line of the log (`"\(mark)"`).
+/// How a mark is written out in a line of the log.
 std::string OceanModel::described(const Mark& mark) {
     switch (mark.kind) {
     case Mark::Kind::words:
         return "words(\"" + mark.text + "\")";
     case Mark::Kind::time:
-        return "time(from: " + swiftDouble(mark.from) + ", to: " + swiftDouble(mark.to) + ")";
+        return "time(from: " + shortestDouble(mark.from) + ", to: " + shortestDouble(mark.to) + ")";
     case Mark::Kind::region:
-        return "region(center: SIMD2<Float>(" + swiftFloat(mark.center.x) + ", " + swiftFloat(mark.center.y) + "), size: SIMD2<Float>(" +
-               swiftFloat(mark.size.x) + ", " + swiftFloat(mark.size.y) + "))";
+        return "region(center: SIMD2<Float>(" + shortestFloat(mark.center.x) + ", " + shortestFloat(mark.center.y) + "), size: SIMD2<Float>(" +
+               shortestFloat(mark.size.x) + ", " + shortestFloat(mark.size.y) + "))";
     }
     return "";
 }
 
 /// `a.lowercased() == b.lowercased()`, without making either.
 ///
-/// NOTE(port): asked of every note's thread on every frame the tree moves, where the Swift makes
-/// two strings each time. Letters of the plain alphabet are compared in place; only if either
+/// Asked of every note's thread on every frame the tree moves, so no string is made for it. Letters of the plain alphabet are compared in place; only if either
 /// string holds anything else are both made over (in capitals, which canvas.h can do), and compared.
 bool OceanModel::sameLowercased(const std::string& a, const std::string& b) {
     bool plain = true;

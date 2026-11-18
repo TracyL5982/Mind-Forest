@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Stage.swift.
+// The stage: where things stand round you, the sheets the layers lie on, and how things ease.
 #pragma once
 #include <functional>
 #include <optional>
@@ -214,10 +214,10 @@ struct Ease {
     Kind kind = Kind::out;
     constexpr Ease() = default;
     constexpr explicit Ease(Kind k) : kind(k) {}
-    /// The cases, as the Swift names them: `.glide` is `Ease::glide`.
+    /// The cases: `Ease::glide` and the rest.
     static const Ease out, pop, inOut, glide, linear, travel, arrive;
 
-    /// Where the curve is at time `u`: `ease(u)` in the Swift.
+    /// Where the curve is at time `u`.
     float operator()(float u) const {
         u = std::min(1.f, std::max(0.f, u));
         switch (kind) {

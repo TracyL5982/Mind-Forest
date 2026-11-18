@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Hands.swift.
+// The hand gestures: the fist that pulls layers and carries the tree, the blade that cuts, the palms together.
 #pragma once
 #include <functional>
 #include <optional>
@@ -9,29 +9,25 @@
 #include "../vecmath.h"
 #include "../platform.h"
 
-/// The hand gestures of the ocean mode, read from ARKit hand tracking
-/// (so, on the headset only; the simulator has stand-ins):
+/// The hand gestures of the ocean mode, read from hand tracking
+/// (so, on the headset only; the Mac preview has stand-ins):
 /// - A fist, pulled toward you or pushed away, moves between the tree's layers.
 ///   Moved sideways or up and down instead, it carries the tree with it.
-///   NOTE(port): changed for Quest (2026-11-15). The Swift has whichever way it first moves be what it does
-///   until it opens, which a first centimetre the wrong way got wrong for the whole gesture. Here both are
-///   read in one frame, set when the fist closes: the shortest line from the fist to the layer in front of it
+///   (2026-11-15.) Both are read in one frame, set when the fist closes: the shortest line from the fist to the layer in front of it
 ///   is the normal axis, and the plane across that line is where the tree is carried. Which of the two the
 ///   fist is doing follows the whole movement so far and can change, with a buffer between them, until one
 ///   of them is committed: a carry of `panCommit`, or a layer stepped. From then on it is that until it opens.
 /// - A flat hand swept sideways, like a knife, cuts the thread it crosses.
-///   NOTE(port): changed for Quest (2026-11-15). Any open hand with its fingers together was a knife, so one
+///   (2026-11-15.) Any open hand with its fingers together was a knife, so one
 ///   showed beside the pointer of nearly every hand. Now it is a pose that has to be made and held: fingers
 ///   straight and together, the hand on its edge, not pinching, the other hand not at it, for `knifeDwell`.
 /// - The palms put together, fingers up, and held for a second presses the tree flat.
-///   (On visionOS: a clap front to back, one hand nearer and one farther along your line of sight.)
 ///
-/// NOTE(port): on the Quest the hands come from the host (platform::hand), which reads OpenXR
-/// hand tracking; the Mac preview has stand-ins.
+/// The hands come from the host (platform::hand), which reads OpenXR hand tracking.
 class Hands {
 public:
     struct Event {
-        // NOTE(port): `panUndone` added for Quest: a carry that turned out to be a push is taken back.
+        // `panUndone`: a carry that turned out to be a push is taken back.
         enum class Kind { layer, pan, panUndone, panEnded, cut, clap };
         Kind kind = Kind::clap;
         int steps = 0;          // layer: +1: a step back toward the root, -1: forward again
@@ -82,7 +78,7 @@ public:
     static constexpr float fistReach = 1.15f;
     static constexpr float openReach = 1.38f;
     static constexpr float layerPull = 0.1f;            // m of fist travel per layer
-    // NOTE(port): the Swift's 0.035 was where a fist was decided for good. Here it is only where reading begins.
+    // Only where reading begins: a fist is decided for good later.
     static constexpr float fistLock = 0.03f;            // m a fist moves before anything is read into it
     // Which of the two a movement is, by how it leans: along the normal axis steeper than `pushLean` it is
     // between layers, flatter than `panLean` it carries. Between the two is the buffer, where it stays what it
@@ -91,7 +87,7 @@ public:
     static constexpr float panLean = 0.78f;             // tan 38 degrees
     static constexpr float fistSure = 0.06f;            // m
     static constexpr float panCommit = 0.09f;           // m across from where it closed: from here the fist only carries, until it opens
-    // NOTE(port): added for Quest, from readings taken in the headset (2026-11-13): a real fist reads
+    // From readings taken in the headset (2026-11-13): a real fist reads
     // a system grasp of 1.0 with every fingertip within 0.86 to 0.9 hand lengths of the wrist; a
     // half-closed hand, in the lap above all, is given a grasp of 0.9 to 1.0 as well, but its fingers
     // reach 1.26 or more. So a fist needs both, and once made it is kept until the hand clearly opens.
@@ -100,12 +96,12 @@ public:
     static constexpr float fistKeepGrasp = 0.6f;        // a fist already made is kept above this reading
     static constexpr float fistKeepReach = 1.2f;        // and within this reach
     static constexpr float pinchClosed = 0.017f;        // m between thumb and index when they pinch
-    // NOTE(port): 1.1 in the Swift. A slice only marks a thread now, and a second one cuts it, so it can be easier to make.
-    // NOTE(port): changed again for Quest (2026-11-15, after Kai wore it): the blade points, as its line of light
+    // A slice only marks a thread, and a second one cuts it, so it can be easy to make.
+    // (2026-11-15, after Kai wore it:) the blade points, as its line of light
     // says it does, so what cuts is the place on the layer it points at, and a stroke is that place's travel
     // there. 2 m/s on a layer 1.2 m off is a hand turning about 95 degrees a second: a flick meant as one.
     static constexpr float bladeSpeed = 2.0f;           // m/s the place the blade points at must move to cut
-    // NOTE(port): added for Quest (2026-11-15): what makes a hand a knife. A finger's straightness is the
+    // What makes a hand a knife. A finger's straightness is the
     // distance from its knuckle to its tip over the length of its three bones: 1 laid out straight, about 0.95
     // in a hand at rest. Each asks more to begin than to keep, so the pose does not flicker at its edge.
     // (Each of the measures that begin it was asked a little more of on 2026-11-15, after Kai wore the first
@@ -124,26 +120,24 @@ public:
     // One stroke, one cut. After a cut lands nothing cuts for `cutPause`, and after that not until the place the
     // blade points at has come to rest: slower than `strokeRest` for `strokeRestFor`. A hand that shakes, or
     // tracking that jitters, goes on moving and so never makes the second cut that confirms; a second stroke
-    // made on purpose starts from a pause. (The Swift's 0.6 s alone let a shake through.)
+    // made on purpose starts from a pause. (0.6 s alone let a shake through.)
     static constexpr double cutPause = 0.8;             // s
     static constexpr float strokeRest = 0.5f;           // m/s on the surface
     static constexpr double strokeRestFor = 0.2;        // s
     static constexpr float knifeSteady = 0.04f;         // s the way the blade points is steadied over: at 1.2 m a degree of shiver is 2 cm
-    // NOTE(port): changed for Quest. The Swift's clap is front to back and lands at once (armed 0.2 m
-    // apart in depth, landed under 0.075 m within 0.7 s), which hands passing each other set off. Here the
+    // A clap that lands at once is set off by hands passing each other, so the
     // palms are put together, fingers up, as in prayer, and held so for a second.
     static constexpr float clapClose = 0.085f;          // m between the middles of the palms when they are together
     static constexpr double clapHold = 1.0;             // s they are held so
     static constexpr float clapUp = 0.03f;              // m each middle fingertip is above its wrist as they come together: fingers up
 
-    // NOTE(port): no ARKitSession and no HandTrackingProvider: the host tracks the hands and
-    // gives both each frame, already in world space (platform::hand).
+    // The host tracks the hands and gives both each frame, already in world space (platform::hand).
     bool tracking = false;
     /// Why the hands are or aren't being read, in a few words.
     std::string status = "not started";
     /// A fist or a blade was seen this recently: pinches meanwhile aren't taps.
     double busyUntil = 0;
-    /// NOTE(port): added for Quest (WS75, from the headset). The same, for each hand (0 left, 1 right): a fist held in one
+    /// The same, for each hand (0 left, 1 right): a fist held in one
     /// hand says nothing of a pinch made with the other. (A left hand resting closed kept every pinch of the right from
     /// being taken.) Palms together, and `hold`, busy both.
     double handBusy[2] = {0, 0};
@@ -232,7 +226,6 @@ public:
     /// A closed hand is stepping between layers or carrying the tree right now.
     bool carrying() const { return left.fistWay != 0 || right.fistWay != 0; }
 
-    // NOTE(port): added for Quest (2026-11-15).
     /// The frame a closed hand is read in: the surface in front of it, as the scene has it.
     struct Surface {
         Vec3 normal;                // from the hand into the surface, along the shortest line to it
@@ -244,7 +237,7 @@ public:
     /// a blade points at nothing and cuts nothing.
     std::function<std::optional<Vec3>(Vec3, Vec3)> target;
 
-    // NOTE(port): added for Quest, for the gauge drawn round a closed hand (handglow.h).
+    // For the gauge drawn round a closed hand (handglow.h).
     /// What a closed hand is doing, once it has been closed long enough to count.
     struct Grab {
         int hand = 0;               // 0 left, 1 right
@@ -260,7 +253,7 @@ public:
     };
     std::vector<Grab> grabs() const;
 
-    // NOTE(port): added for Quest, for the blade drawn on a flat hand (handglow.h).
+    // For the blade drawn on a flat hand (handglow.h).
     /// A hand held as a knife (see `knifeStraight`).
     struct Blade {
         int hand = 0;               // 0 left, 1 right
@@ -274,7 +267,7 @@ public:
     };
     std::vector<Blade> blades() const;
 
-    // NOTE(port): added for Quest, for the ring drawn round palms held together (handglow.h).
+    // For the ring drawn round palms held together (handglow.h).
     /// The palms are together and being held: where, and how much of the second has passed.
     struct Held {
         Vec3 at;

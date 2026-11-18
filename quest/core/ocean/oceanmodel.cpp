@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/OceanModel.swift: the model itself, setup, the frame, the
+// The ocean's model: the model itself, setup, the frame, the
 // glass, the grid under the layers, what the hands are read as, the small tree by hand, panning
 // by hand. (See oceanmodel.h for where the rest is.)
 #include "oceanmodel.h"
@@ -20,11 +20,9 @@ OceanModel::~OceanModel() {
 
 /// The room stays in sight, barely dimmed (`-dim 1` for not at all).
 float OceanModel::surroundingsDim() {
-    // NOTE(port): `UserDefaults.standard.object(forKey: "dim") as? Double ?? 0.88` in the Swift,
-    // whose cast a launch argument (which arrives as text) may not pass; here `-dim` is read as
-    // the number it is meant to be. `v` is the share of the room's light that is kept.
+    // `-dim` is read as a number. `v` is the share of the room's light that is kept.
     static const double v = Flags::has("dim") ? Flags::number("dim") : 0.88;
-    // (`v >= 0.999 ? nil : .colorMultiply(Color(white: v))`: what is given is the share removed.)
+    // (What is given is the share removed.)
     return v >= 0.999 ? 0 : float(1 - v);
 }
 
@@ -42,7 +40,7 @@ void OceanModel::start() {
     this->library = library;
     this->art = art;
     this->catalog = catalog;
-    // NOTE(port): added for Quest. `-cards` draws the ocean's notes, films and works as the agent's cards; a tag keeps its chip (core/cards).
+    // `-cards` draws the ocean's notes, films and works as the agent's cards; a tag keeps its chip (core/cards).
     if (Flags::has("cards")) {
         cards::ocean::hold(catalog);
         cardGestures = true;
@@ -55,11 +53,9 @@ void OceanModel::start() {
     catalog->chipWidth = [art](const std::string& name) { return art->chipWidth(name); };
     catalog->smallSize = [this](const Ref& ref) { return bodies(ref).small; };
     lineMaterial = Material::line();
-    // NOTE(port): the three ShaderGraph materials are the renderer's own here: there is no file
-    // to find and nothing that can fail to load, so the Swift's two lines for that ("[ocean] dust
-    // material unavailable, the ocean stands still", "[ocean] gaze glow unavailable, a looked-at
-    // card brightens instead") are never written. Each is still held as one that may be missing,
-    // and everything that uses it still does without where it is.
+    // The three materials are the renderer's own: there is no file to find and nothing that can fail
+    // to load. Each is still held as one that may be missing, and everything that uses it does without
+    // where it is.
     {
         Material m = Material::dust();
         m.cull = false;
@@ -72,12 +68,12 @@ void OceanModel::start() {
         m.writesDepth = false;
         gazeMaterial = m;
     }
-    // NOTE(port): `await tracker.start()` has nothing to do: the host tracks the head (platform::head).
+    // The host tracks the head (platform::head).
     hands->surface = [this](Vec3 hand) { return fistSurface(hand); };
     // A blade cuts on the layer you work on, where it points.
     hands->target = [this](Vec3 from, Vec3 along) { return onSheet(from, from + along); };
     hands->start();
-    audio::start();     // NOTE(port): added for Quest (oceanmodel_sound.cpp)
+    audio::start();     // the app's own sounds (oceanmodel_sound.cpp)
     loaded = true;
 }
 
@@ -85,8 +81,7 @@ void OceanModel::start() {
 
 void OceanModel::build() {
     if (!art || !catalog || !library) return;
-    // NOTE(port): changed for Quest: `stage = Stage(head: tracker.transform())` in the Swift, which stands
-    // the scene wherever the head is and faces. Here it is seated at the desk in front of you (oceanmodel_desk.cpp).
+    // The scene is seated at the desk in front of you (oceanmodel_desk.cpp).
     sit();
     shell = std::make_shared<Shell>(stage, art, library->clips, catalog->works, dustMaterial);
     root_->addChild(shell->root);
@@ -98,9 +93,9 @@ void OceanModel::build() {
     floatingPanes = PaneMesh::make(lineMaterial, true, stage);
     if (panes) root_->addChild(panes->entity);
     if (floatingPanes) root_->addChild(floatingPanes->entity);
-    // NOTE(port): added for Quest. The hand ray's dot rests on the glass under a group instead of
+    // The hand ray's dot rests on the glass under a group instead of
     // flying on to the far backdrop, so it is seen in the plane of the cards it is aimed between. A
-    // pinch there still lands on what is behind the glass, as on visionOS.
+    // pinch there still lands on what is behind the glass.
     if (panes) panes->entity->stopsPointer = true;
     if (floatingPanes) floatingPanes->entity->stopsPointer = true;
     root_->addChild(treeRoot);
@@ -126,8 +121,7 @@ void OceanModel::build() {
     if (std::optional<Piece> piece = art->tray("To image generation")) {
         EntityRef tray = art->quad(*piece);
         tray->position = trayPoint() + stage.u * 0.012f;
-        // NOTE(port): changed for Quest: `stage.facing(trayPoint())` at full size in the Swift. It lies on
-        // the desk here, nearer, so it is smaller and square to the desk's edge.
+        // It lies on the desk, near, so it is smaller and square to the desk's edge.
         tray->orientation = deskFacing(trayPoint());
         tray->scale = Vec3::repeating(trayScale);
         root_->addChild(tray);
@@ -148,9 +142,7 @@ void OceanModel::build() {
 void OceanModel::seat(const EntityRef& entity) {
     // `-deckUp 1` stands it higher and further off, where the simulator's view can see it.
     bool seen = Flags::has("deckUp");
-    // NOTE(port): changed for Quest, at Kai's request (2026-11-15): on the desk, right in front of you.
-    // The Swift stands it well down and to the left, out of the way of a hand reaching for the tree
-    // (`stage.point(-44, -40, 0.6)`: about 32 cm left, 33 cm ahead, 39 cm below the eyes).
+    // On the desk, right in front of you (Kai, 2026-11-15).
     Vec3 p = seen ? stage.point(-27, -16, 0.62f) : desk.at(0, treeBack());
     entity->position = p;
     // Upright, as a tree stands, and turned toward where you sit.
@@ -188,7 +180,7 @@ void OceanModel::update(float dt) {
     feelHologram();
     if (hologram) hologram->update(now, dt);
     layHologramLabel(now);
-    // NOTE(port): added for Quest. While the scene is being brought along (oceanmodel_desk.cpp) the hands
+    // While the scene is being brought along (oceanmodel_desk.cpp) the hands
     // jump with the room: nothing is read from them for that moment.
     bool still = now < handsStillUntil, wasQuiet = hands->quiet;
     if (still) hands->quiet = true;
@@ -211,10 +203,10 @@ void OceanModel::update(float dt) {
     standMore();
     // Build a couple of waiting cards a frame, so a step never stalls.
     int budget = 2;
-    // NOTE(port): changed for Quest. A work's small card draws its picture from the work's own file,
+    // A work's small card draws its picture from the work's own file,
     // and unpacking that takes several frames' time on the headset's chip. It is unpacked on a
     // background thread, and the card waits in the queue until it is there (showing its placeholder)
-    // while the cards behind it are built. The Swift builds the first two, whatever they are.
+    // while the cards behind it are built.
     // A piece drawn as a card waits the same way for the pictures it shows (core/cards).
     auto waits = [&](const CardView& c) {
         if (std::optional<std::string> drawn = cards::ocean::cardOf(c.ref)) return !cardPictures(*drawn);
@@ -245,7 +237,7 @@ void OceanModel::update(float dt) {
             i++;
         }
     }
-    // NOTE(port): added for Quest (core/cards).
+    // The pictures a card asked for (core/cards).
     landPictures();
     repaintCards();
     holdPress();
@@ -320,7 +312,7 @@ void OceanModel::lookAtOcean(float dt) {
         float swing = gazeSweep() > 0 ? 25 * std::sin(float(time) * gazeSweep() / 25) : 0;
         shell->look(stage.origin, stage.dir(*az + swing, gazeEl()), dt);
     } else if (std::optional<Mat4> head = platform::head()) {
-        // NOTE(port): changed for Quest. The headset's own "ahead" is higher than where the eyes rest
+        // The headset's own "ahead" is higher than where the eyes rest
         // in it (its lenses look a little down, and it sits tipped on the face): by about 15 degrees,
         // as Kai found wearing it. The zoom follows the line that much lower.
         float drop = gazeDrop() * floatPi / 180;
@@ -367,9 +359,8 @@ void OceanModel::layout(double now) {
     if (current) {
         if (const CardRef& c = card(*current)) currentXY = c->xy.value(now);
     }
-    // NOTE(port): `var sheets: [Int: Stage.Sheet] = [:]`, kept by the model and emptied here (see oceanmodel.h).
+    // The sheets, kept by the model and emptied here (see oceanmodel.h).
     sheets.clear();
-    /// (The Swift's `(spot: Stage.Spot, boost: Float, curve: Float, fade: Float)`.)
     struct Placed {
         Stage::Spot spot;
         float boost;
@@ -456,7 +447,7 @@ void OceanModel::layout(double now) {
 /// onto its cards. `-noGlass` leaves them out.
 void OceanModel::drawPanes(double now) {
     if (!panes || !floatingPanes) return;
-    // NOTE(port): `flat` and `floating` in the Swift, made afresh; here the model's own, emptied.
+    // `flat` and `floating`: the model's own, emptied.
     std::vector<PaneMesh::Pane>& flat = flatPanes;
     std::vector<PaneMesh::Pane>& floating = floatPanes;
     flat.clear();
@@ -468,7 +459,7 @@ void OceanModel::drawPanes(double now) {
     }
     const Tree& tree = *this->tree;
     auto presence = [&](const CardView& c) -> float { return now >= c.bornAt ? c.alpha.value(now) * smoothstep(0, 0.6f, c.emerge.value(now)) : 0; };
-    // (In the order of their ids; a Swift dictionary has none.)
+    // (In the order of their ids.)
     for (const auto& [nid, n] : tree.nodes) {
         if (!n.head) continue;
         const CardRef& held = card(n.id);
@@ -583,7 +574,7 @@ void OceanModel::drawGrid(double now) {
     }
     float awake = gridAwake.value(now), level = focusLevel.value(now);
     Vec2 pan = this->pan.value(now);
-    // NOTE(port): `var live: Set<Int> = []`: at most four layers can pass the test below, so they are kept in place.
+    // The live layers: at most four can pass the test below, so they are kept in place.
     std::array<int, 8> live{};
     size_t liveCount = 0;
     auto isLive = [&](int head) { return std::find(live.begin(), live.begin() + liveCount, head) != live.begin() + liveCount; };
@@ -630,7 +621,7 @@ void OceanModel::noteHands() {
     const EntityRef& deckEntity = hologram->entity;
     handsNoteAt = time;
     std::string words = hands->summary() + (nearestTip.empty() ? "" : " · " + nearestTip);
-    // NOTE(port): Documents/ocean-hands.txt in the Swift; here beside the shelf, in the folder the app may write to.
+    // Beside the shelf, in the folder the app may write to.
     if (!handsLog) {
         std::string dir = platform::dataDirectory();
         if (!dir.empty()) handsLog = std::fopen((dir + "/ocean-hands.txt").c_str(), "w");
@@ -702,8 +693,7 @@ void OceanModel::refreshHologram(const Tree& tree) {
         }
     }
     if (!hologram->entity->isEnabled || holoHiding) {
-        // NOTE(port): changed for Quest: `fadeIn(hologram.entity, delay: 0.2, over: 0.5)` in the Swift. When
-        // the tree was opened from its cover, the small tree shows as the cover's tree arrives in its place.
+        // When the tree was opened from its cover, the small tree shows as the cover's tree arrives in its place.
         holoHiding = false;
         hologram->entity->isEnabled = true;
         fades.erase(std::remove_if(fades.begin(), fades.end(), [&](const Fade& f) { return f.entity == hologram->entity; }), fades.end());
@@ -751,7 +741,6 @@ void OceanModel::feelHologram() {
     // A hand that is carrying the tree, or a pinch that is dragging a card, passes by without waking it.
     bool passing = !holoTouching && (press.has_value() || hands->carrying());
     float margin = holoTouching ? 0.075f : 0.035f;
-    /// (The Swift's `(aside: Float, hand: Int)` and `(gap: Float, words: String)`.)
     struct Best {
         float aside;
         int hand;
@@ -762,9 +751,8 @@ void OceanModel::feelHologram() {
     };
     std::optional<Best> best;
     std::optional<Closest> closest;
-    // NOTE(port): changed on 2026-11-14 at Kai's request, after trying it in the headset: only the index
-    // finger works the small tree. The Swift lets any fingertip of either hand wake it and hold it, which
-    // made it unclear what was doing the picking.
+    // Only the index finger works the small tree (Kai, 2026-11-14, after trying it in the headset): with
+    // any fingertip of either hand it was unclear what was doing the picking.
     for (const Hands::Fingertip& finger : hands->fingertips()) {
         int hand = finger.hand;
         Vec3 tip = finger.tip;
@@ -774,8 +762,7 @@ void OceanModel::feelHologram() {
         Vec3 p = hologram->entity->convertFrom(tip, nullptr);
         float aside = std::sqrt(p.x * p.x + p.z * p.z);
         Vec2 off{std::max(aside - hologram->width(), 0.f), std::max({-p.y, 0.f, p.y - hologram->top()})};
-        // NOTE(port): the Swift writes the words out for every fingertip that is the nearest so
-        // far; here only where it is kept, and the words once, after the last.
+        // Only where it is kept, and the words once, after the last.
         if (!closest || length(off) < closest->gap) closest = Closest{length(off), off};
         if (!(!passing && (holoTouching || !hands->grabbing(hand)))) continue;
         if (!(aside < hologram->width() + margin && p.y > -margin && p.y < hologram->top() + margin)) continue;
@@ -865,8 +852,7 @@ void OceanModel::layHologramLabel(double now) {
         if (name) {
             words = fmt("%d  %s", layer + 1, name->c_str());
         } else {
-            // NOTE(port): the Swift counts the groups every frame and uses the count only here,
-            // where the layer has no name; counting changes nothing, so it is done only here.
+            // The groups are counted only here, where the layer has no name.
             int groups = 0;
             for (const auto& [id, n] : tree->nodes) {
                 if (n.head && tree->generation(n.id) == layer) groups += 1;
@@ -934,8 +920,8 @@ void OceanModel::panByFlag(Vec2 d) {
 void OceanModel::panBy(Vec2 d) {
     if (!(tree && !pressing)) return;
     // The sheet is three times as far away as the hand, so it moves three times as far: it stays under the fist.
-    // NOTE(port): changed for Quest. The Swift puts the tree there at once (`pan.set`), which carries
-    // every shiver of the hand into the whole tree. Here the fist says where it should be, and the tree
+    // Put there at once, the tree would carry every shiver of the hand. So the fist says where it should
+    // be, and the tree
     // goes there with some weight (`followPan`): steadier, and easier on the stomach.
     if (!panFollowing) {
         panAsked = pan.value(time);
@@ -974,8 +960,7 @@ void OceanModel::panRelease(Vec2 velocity) {
     float speed = length(v);
     if (speed > 1.5f) v *= 1.5f / speed;
     if (!(speed > 0.05f)) return;
-    // NOTE(port): changed for Quest. The Swift lets it run on 0.15 s of its speed over 0.45 s; in the
-    // headset that glide was too long. It runs on a third as far, and settles with the same weight it
+    // It runs on a short way (a longer glide was too long in the headset), and settles with the same weight it
     // was carried with.
     if (!panFollowing) {
         panAsked = pan.value(time);
@@ -1042,7 +1027,7 @@ std::optional<Vec3> OceanModel::onSheet(Vec3 from, Vec3 through, float lift) con
 /// the body it is far off to the side, a few centimetres nearer than the sheet straight ahead. So it is the
 /// place straight ahead of the fist, the way you are facing: the line a push goes along.
 /// `-fistFrame nearest` takes the nearest place instead, `-fistFrame eye` the place the fist is seen against
-/// (how it was earlier on 15 Nov), `-fistFrame hand` the Swift's.
+/// (how it was earlier on 15 Nov), `-fistFrame hand` the hand's own frame.
 std::optional<Hands::Surface> OceanModel::fistSurface(Vec3 hand) const {
     static const std::string how = Flags::string("fistFrame").value_or("ahead");
     if (how == "hand") return std::nullopt;

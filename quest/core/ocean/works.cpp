@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Works.swift: the part of Art that draws museum works.
+// The museum works: the part of Art that draws them.
 // (Its declarations are in art.h.)
 #include "art.h"
 
@@ -42,7 +42,7 @@ void Art::thumb(const Work& work, CGRect rect) const {
 /// A work's picture read from its own file, no larger than `pixels` on its long side.
 ImageRef Art::picture(const Work& work, int pixels) const {
     if (!workLibrary) return nullptr;
-    // NOTE(port): changed for Quest: from a small copy where one will do (see `pictureSource`).
+    // From a small copy where one will do (see `pictureSource`).
     Source source = pictureSource(work, pixels);
     if (source.url.empty()) return nullptr;
     return read(source.url, source.maxPixel > 0 ? std::optional<int>(source.maxPixel) : std::nullopt);
@@ -63,8 +63,8 @@ Art::Source Art::pictureSource(const Work& work, int pixels) const {
 }
 
 ImageRef Art::read(const std::string& url, std::optional<int> pixels) {
-    // NOTE(port): ImageIO's two ways of reading (the whole picture, or a thumbnail no larger than
-    // `pixels`, turned upright) are platform::loadImage with and without a `maxPixel`.
+    // The whole picture, or a thumbnail no larger than `pixels`, turned upright: platform::loadImage
+    // with and without a `maxPixel`.
     if (!pixels) return platform::loadImage(url);
     return platform::loadImage(url, *pixels);
 }
@@ -80,8 +80,7 @@ void Art::drawPicture(const Work& work, CGRect rect) const {
 
 /// The work's picture at full size, read and made off the main thread's time.
 TextureRef Art::fullTexture(const Work& work) const {
-    // NOTE(port): `async` in the Swift, which reads the file on another thread. Here it is read
-    // where it is asked for, on the frame thread: a frame waits while a 1600 px picture decodes.
+    // Read where it is asked for, on the frame thread: a frame waits while a 1600 px picture decodes.
     if (!workLibrary) return nullptr;
     const std::shared_ptr<WorkLibrary>& library = workLibrary;
     std::string url = library->fullURL(work);

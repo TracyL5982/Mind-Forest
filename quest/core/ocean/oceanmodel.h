@@ -1,6 +1,6 @@
-// Port of visionos/MindPalace/Ocean/OceanModel.swift.
+// The ocean's model: the scene, its trees and cards, the hands, and everything they do.
 //
-// The implementation is in several files, along the Swift's `// MARK:` sections and in its order:
+// The implementation is in several files, along its `// MARK:` sections and in their order:
 //   oceanmodel.cpp          start, Setup, Frame, Glass, The grid under the layers, What the hands
 //                           are read as, The small tree by hand, Panning by hand
 //   oceanmodel_cards.cpp    Cards
@@ -88,10 +88,10 @@ public:
     std::shared_ptr<agent::Bridge> agentBridge;     // AGENT: only with -agent
     std::shared_ptr<agent::PresenceDemo> presenceDemo;     // AGENT: only with -presenceDemo
     std::shared_ptr<agent::EchoCheck> echoCheck;     // AGENT: only with -echoCheck
-    // NOTE(port): `root` in the Swift. PalaceScene asks for it as a function, so the field takes an underscore.
+    // PalaceScene asks for the root as a function, so the field takes an underscore.
     EntityRef root_ = Entity::make();
     EntityRef root() override { return root_; }
-    // NOTE(port): no `subscription`: the host calls `update` itself, once a frame.
+    // The host calls `update` itself, once a frame.
 
     ~OceanModel() override;
 
@@ -99,9 +99,9 @@ private:
     using CardRef = std::shared_ptr<CardView>;
     using TreeRef = std::shared_ptr<Tree>;
 
-    // NOTE(port): the Swift makes several small dictionaries and sets afresh on every frame the
-    // tree moves (in `layout` and `drawThreads`). As std::map and std::set each entry would be a
-    // piece of memory asked for and given back, every frame, which the Swift's are not. These two
+    // Several small dictionaries and sets are needed afresh on every frame the tree moves (in
+    // `layout` and `drawThreads`). As std::map and std::set each entry would be a piece of memory
+    // asked for and given back, every frame. These two
     // keep their entries in one row, in key order, and the model holds on to them from frame to
     // frame: once a row has been as long before, filling it again asks for nothing.
     template <class V>
@@ -139,7 +139,7 @@ private:
         }
     };
 
-    // NOTE(port): no `tracker`: HeadTracker().transform() is platform::head().
+    // Where the head is comes from platform::head().
     std::shared_ptr<Hands> hands = std::make_shared<Hands>();
     Stage stage;
     std::shared_ptr<Art> art;
@@ -163,14 +163,14 @@ private:
     std::map<int, CardRef> cards;
     std::vector<CardRef> leaving;
     std::vector<int> buildQueue;
-    // NOTE(port): added for Quest (see `update` and `showFull`): how many frames a work's small card
+    // How many frames a work's small card
     // has waited for its picture to be unpacked, and the open works whose full picture is on its way.
     std::map<int, int> buildWaited;
-    // NOTE(port): added for Quest. A card that is waiting its turn to be built (or for its picture to be
+    // A card that is waiting its turn to be built (or for its picture to be
     // unpacked) shows where it will be, as a faint film of light the size it will have, once it has
     // waited long enough to be noticed (the renderer's placeholder, render.h). Each card's, by its id.
     std::map<int, EntityRef> ghosts;
-    // NOTE(port): added for Quest (see `stand`): the cards of a tree just stood up that are still to be
+    // The cards of a tree just stood up that are still to be
     // made, each with the moment it is due to appear, and which tree they are for.
     struct StandWaiting {
         int id;
@@ -184,7 +184,6 @@ private:
     void finishFull(int id);
     Tween<Vec2> pan{Vec2::zero()};                      // the open card's place on its layer: it is kept in the middle
     Tween<float> focusLevel{0.f};                       // the layer you work on, counted from the root's
-    /// (The Swift's `(thread: Threads.Thread, child: Int)`.)
     struct Drawn {
         Threads::Thread thread;
         int child;
@@ -198,7 +197,7 @@ private:
         Vec3 v = Vec3::zero();
     };
     Scratch<Strand> strands;
-    /// A line of words standing in the room, and what it says: the Swift's `(entity: ModelEntity, words: String)`.
+    /// A line of words standing in the room, and what it says.
     struct Label {
         EntityRef entity;
         std::string words;
@@ -240,7 +239,6 @@ private:
         static MarkKind time() { return {Kind::time, 0}; }
         static MarkKind region() { return {Kind::region, 0}; }
     };
-    /// (The Swift's `(id: Int, kind: MarkKind, from: SIMD2<Float>, to: SIMD2<Float>, made: Mark?, words: String)`.)
     struct Marking {
         int id;
         MarkKind kind;
@@ -250,10 +248,10 @@ private:
         std::string words;
     };
     std::optional<Marking> marking;
-    // NOTE(port): added for Quest. A drag on the open card no longer marks it by itself: gone into, the card
+    // A drag on the open card no longer marks it by itself: gone into, the card
     // shows what it can be marked with (a stretch of its video, part of its picture, some of its words) as
     // buttons over it, and a drag marks with the one picked. A mark can be taken off again.
-    // NOTE(port): changed for Quest (2026-11-15, Kai): three icons at the picture's top right corner. The pen:
+    // Three icons at the picture's top right corner (2026-11-15, Kai). The pen:
     // while it is on, a drag on the card marks it, as what was under where the drag began would have it (a
     // picture is drawn on, words are highlighted, a video's stretch is taken). The eraser takes the mark off.
     // Send asks about what is marked.
@@ -264,7 +262,7 @@ private:
     float toolsTall = 0;                                // how tall their column is, m
     static constexpr float toolSize = 0.1f;             // one of them, m across (they keep this size as the card grows)
     static constexpr float toolGap = 0.014f;
-    // NOTE(port): each has a tag, in the labels' own flat form, that comes out to its right while a hand's ray
+    // Each has a tag, in the labels' own flat form, that comes out to its right while a hand's ray
     // rests on it and says what it is for: Comment, Erase, Send to Momo.
     struct ToolTag {
         EntityRef button, tag;
@@ -273,7 +271,7 @@ private:
     std::vector<ToolTag> toolTags;
     float toolOut[3] = {0, 0, 0};                       // how far out each tag is, 0…1 (kept while the buttons are made again)
     double toolsMadeAt = 0, toolsLast = 0;
-    // NOTE(port): added for Quest. A picture is marked as with a marker: the tool in hand, a pinch held and
+    // A picture is marked as with a marker: the tool in hand, a pinch held and
     // moved draws on it freely, stroke after stroke, in the accent. What is marked (what the gardener is
     // asked about) is the part of the picture the strokes cover between them.
     struct Ink {
@@ -297,7 +295,7 @@ private:
 
     // MARK: - Cutting (oceanmodel_cut.cpp)
 
-    // NOTE(port): added for Quest. A thread is not cut at once. A slice of the flat hand, or a pinch on
+    // A thread is not cut at once. A slice of the flat hand, or a pinch on
     // the thread, marks it for cutting: it turns to the accent and "Cut again to confirm" stands on it for a few seconds.
     // A second slice across it, or a pinch on those words, cuts it; anything else lets it be.
     struct CutArmed {
@@ -345,7 +343,6 @@ private:
     };
     using MoverRef = std::shared_ptr<Mover>;
     std::vector<MoverRef> movers;
-    /// (The Swift's `(film: Int, mover: Mover, width: Float)`.)
     struct Peek {
         int film;
         MoverRef mover;
@@ -354,7 +351,7 @@ private:
     std::optional<Peek> peek;                           // a film or a work, by its place among the pieces
     std::vector<int> fullPictures;                      // cards showing a work from its own file, oldest first
 
-    // NOTE(port): added for Quest: a picture on a cover, and the card it stands for.
+    // A picture on a cover, and the card it stands for.
     struct CoverPicture {
         int id;                             // the card
         Ref ref;                            // the film or the work (AGENT: or a service card, whose own picture it shows)
@@ -365,8 +362,8 @@ private:
         Vec3 from = Vec3::zero();           // AGENT: where it eases from to `at`, since `moveStart` (-1: it is at `at`)
         double moveStart = -1;
     };
-    // NOTE(port): added for Quest, at Kai's word (2026-11-15): on a tree that stands on the desk the
-    // pictures are 0.65 of the size the Swift gives them and as much nearer the trunk ("too large, and
+    // At Kai's word (2026-11-15): on a tree that stands on the desk the
+    // pictures are 0.65 of their size elsewhere and as much nearer the trunk ("too large, and
     // they don't huddle close enough to the tree"); on one that lies on the ocean's floor, 0.75.
     static constexpr float huddleUp = 0.65f;
     static constexpr float huddleDown = 0.75f;
@@ -376,7 +373,7 @@ private:
         MoverRef mover;
         std::vector<EntityRef> tilts;       // its pictures and its name, tipped to face you
         Vec2 spot;                          // degrees right of ahead, and up
-        // NOTE(port): added for Quest. A tree put away stands on the desk (oceanmodel_desk.cpp): where on
+        // A tree put away stands on the desk (oceanmodel_desk.cpp): where on
         // it (Desk::plot), and how far its cover's middle is above its foot, in the cover's own measure.
         Vec2 plot = Vec2::zero();
         float foot = 0;
@@ -419,7 +416,7 @@ private:
     int nextUID = 0;
     int trayCount = 0;
     std::optional<Vec2> standingSpot;                   // where the standing tree's cover hung, if it had one
-    std::optional<Vec2> standingPlot;                   // NOTE(port): added for Quest: and where it stood on the desk
+    std::optional<Vec2> standingPlot;                   // And where it stood on the desk
     bool shelfDirty = false;
     bool shelfLoaded = false;
 
@@ -427,7 +424,7 @@ private:
     std::string stripKey;
 
     // MARK: The desk (oceanmodel_desk.cpp)
-    // NOTE(port): added for Quest; nothing of it is in the Swift. The scene is seated at a desk: the
+    // The scene is seated at a desk: the
     // table the headset knows in front of you, squared to its near edge, or one assumed where a desk
     // usually is (desk.h). The small tree stands on it right in front of you, the trees put away
     // behind it as a forest, what can be done with the standing tree to the right. The scene's own
@@ -447,7 +444,7 @@ private:
     float briefsEl() const;
     /// Square to the desk's edge and tipped up to the eyes: how a label that stands on the desk at `p` is turned.
     Quat deskFacing(Vec3 p) const;
-    /// How much smaller the tray is on the desk than where the Swift hangs it, further off.
+    /// How much smaller the tray is on the desk than it would be hung further off.
     static constexpr float trayScale = 0.7f;
     /// Works out the forest's places for the desk as it is now.
     void plantForest();
@@ -467,7 +464,7 @@ private:
     // becomes it, and its pictures rise to their cards' places on the layers.
     bool forestDown = false;
     bool standPending = false;                          // a tree is making way for another: the forest stays down between the two
-    // NOTE(port): and while the greeting after the walk has the room (oceanmodel_guide.cpp): it stands alone, and
+    // And while the greeting after the walk has the room (oceanmodel_guide.cpp): it stands alone, and
     // the kept trees come up to the desk when it goes.
     bool wantDown() const { return tree != nullptr || standPending || teach.home != nullptr || teach.homeDue; }
     /// How far back from the desk's near edge the forest begins.
@@ -571,7 +568,7 @@ private:
     static bool noDesk() { static const bool v = Flags::has("noDesk"); return v; }
     /// The whole tree, small and within reach: where you are in it, and the way to any other layer.
     std::shared_ptr<Hologram> hologram;
-    // NOTE(port): added for Quest (handglow.h): light on the hands themselves, saying what a fist or a
+    // Light on the hands themselves, saying what a fist or a
     // finger on the small tree is doing; which hand is on the tree, and the level its finger last lit.
     std::shared_ptr<HandGlow> handGlow;
     int holoHand = -1;
@@ -580,7 +577,6 @@ private:
 
     // MARK: - The guide: what teaches the hands (oceanmodel_guide.cpp)
 
-    // NOTE(port): added for Quest; there is nothing like it in the Swift.
     /// A gesture a ghost hand teaches: whether it is known, how often it has been shown and left
     /// unlearned, since when its moment has been here, and until when it is left alone.
     struct GuideLesson {
@@ -763,7 +759,7 @@ private:
     bool pointerHidden(int hand) override { return (holoTouching && hand == holoHand) || (hand >= 0 && hand < 2 && bladeOut[hand]); }
 
     // MARK: Sound (oceanmodel_sound.cpp)
-    // NOTE(port): added for Quest: the visionOS app has no sounds of its own yet. The sounds are made
+    // The app's own sounds. They are made
     // by quest/sound/synth.py and played by core/audio.h; what follows says when. Everything is in one
     // key. A layer has a chord, struck as you arrive on it; a single thing (a card that arrives, a
     // level of the small tree) has a single note. The head moving sounds one thing only: the
@@ -814,14 +810,14 @@ private:
     std::string swelling;                               // the layer chord that is held now, for a fist nearing its gate
     std::optional<int> levelSounded;                    // the small tree's level last heard
     bool quietPress = false;                            // the tree is pressed only to make way for another
-    // NOTE(port): added for Quest. The tree follows a carrying fist with some weight (see `panBy`):
+    // The tree follows a carrying fist with some weight (see `panBy`):
     // where the fist has asked it to be, and whether it is still on its way there.
     Vec2 panAsked = Vec2::zero();
     bool panFollowing = false;
     void followPan(float dt);
     /// Seconds the tree takes to close most of the distance to a carrying fist (`-panWeight <s>`).
     static float panWeight() { static const float v = Flags::number("panWeight") > 0 ? float(Flags::number("panWeight")) : 0.16f; return v; }
-    /// How far it runs on when let go, in seconds of the speed it had (`-panCoast <s>`); the Swift's is 0.15.
+    /// How far it runs on when let go, in seconds of the speed it had (`-panCoast <s>`).
     static float panCoast() { static const float v = Flags::has("panCoast") ? float(Flags::number("panCoast")) : 0.05f; return v; }
     /// Degrees below where the headset points that the eyes rest (`-gazeDrop <degrees>`): what the ocean's zoom follows.
     static float gazeDrop() { static const float v = Flags::has("gazeDrop") ? float(Flags::number("gazeDrop")) : 15; return v; }
@@ -829,10 +825,9 @@ private:
     bool holoArmed = false;                             // that hand has been open since it arrived: its next pinch picks
     double holoRest = 0.0;                              // no hand counts before this: the one that just picked is still there
     std::optional<double> holoLeft;                     // when the hand last came away
-    HoloReach holoReach;                                // NOTE(port): added for Quest: only a finger you can see works it
+    HoloReach holoReach;                                // Only a finger you can see works it
     std::optional<Label> holoLabel;
     /// Small things on their way in or out: nothing appears or goes in one frame.
-    /// (The Swift's `(entity: Entity, alpha: Tween<Float>, remove: Bool)`.)
     struct Fade {
         EntityRef entity;
         Tween<float> alpha;
@@ -871,13 +866,12 @@ private:
     std::map<const Entity*, Pick> picks;
     std::vector<const Entity*> stripPicks;
 
-    /// (The Swift's `(pick: Pick, start: SIMD3<Float>, cancelled: Bool, riders: [Int])`.)
     struct Press {
         Pick pick;
         Vec3 start;
         bool cancelled;
         std::vector<int> riders;
-        // NOTE(port): added for Quest (core/cards). Under `-cards` a pinch on the open card scrolls it, or, held still
+        // Under `-cards` a pinch on the open card scrolls it, or, held still
         // first, asks for more like it, or with the pen up marks it: a highlight or a line the service keeps (`edit`), or a
         // mark of the headset's own (`mark`). When it began, where it is now, and what it was claimed for. A claimed pinch
         // is never a tap.
@@ -888,8 +882,8 @@ private:
         /// Scrolling: the offset, px, and the point on the face, m, where the scroll was claimed.
         float scrollFrom = 0;
         Vec2 scrollAt = Vec2::zero();
-        bool lifted = false;                // NOTE(port): added for Quest: what is held has come away from its place (its sound has played)
-        float reach = 0;                    // NOTE(port): added for Quest: the furthest it has been from where it began, m (see `pinchEnded`)
+        bool lifted = false;                // What is held has come away from its place (its sound has played)
+        float reach = 0;                    // The furthest it has been from where it began, m (see `pinchEnded`)
     };
     std::optional<Press> press;
     EntityRef releasedOver;             // what the ray of the hand that held the last pinch was on as it let go
@@ -900,7 +894,6 @@ private:
     static constexpr int guideOffButtons = 110;
     double time = 0.0;
     double busyUntil = 0.0;
-    /// (The Swift's `(at: Double, run: () -> Void)`.)
     struct Scheduled {
         double at;
         std::function<void()> run;
@@ -910,13 +903,13 @@ private:
     double frameTime = 0.0, workTime = 0.0, lastReport = 0.0;
     std::array<double, 3> parts{0.0, 0.0, 0.0};
 
-    // NOTE(port): what the Swift makes afresh each frame and this keeps from one frame to the
+    // What would otherwise be made afresh each frame, kept from one frame to the
     // next, empty between uses (see `Scratch` above). Each is named where it is used.
     Scratch<Stage::Sheet> sheets;                       // layout
     std::vector<PaneMesh::Pane> flatPanes, floatPanes;  // drawPanes: `flat` and `floating`
     std::vector<Vec2> panePoints;                       // drawPanes: `points`
     std::vector<Drawn> list;                            // drawThreads
-    /// The label on a thread: its text, color and size. (The Swift's `(String, Tone, Float)`.)
+    /// The label on a thread: its text, color and size.
     struct Words {
         const std::string* text;            // a node's or a link's own `why`: it stays put for the frame
         Tone tone;
@@ -939,8 +932,7 @@ public:
 
     /// The room stays in sight, barely dimmed (`-dim 1` for not at all).
     ///
-    /// NOTE(port): `surroundings` in the Swift, a SurroundingsEffect that multiplies the room's
-    /// colour by a white of `v`. So the Swift's number, and `-dim`'s, is the share of the room's
+    /// The room's colour is multiplied by a white of `v`, so `-dim`'s number is the share of the room's
     /// light that is KEPT (0.88 unless said). What is returned here is the share REMOVED, 1 - v,
     /// which is what PalaceScene asks for; 0 leaves the room alone.
     float surroundingsDim() override;
@@ -955,7 +947,7 @@ private:
     /// The small tree stands on the desk, right in front of you and within reach: it is worked by hand.
     void seat(const EntityRef& entity);
 
-    // NOTE(port): changed for Quest: `stage.point(46, -22, 1.3)` in the Swift; here the tray lies on the desk, to the right.
+    // The tray lies on the desk, to the right.
     Vec3 trayPoint() const { Vec2 p = trayPlot(); return desk.at(p.x, p.y); }
 
     // MARK: - Frame
@@ -1011,7 +1003,7 @@ private:
     /// layers share falls as this layer shows it, how far the layer has
     /// drawn in, and how much of the view's pan it follows.
     ///
-    /// NOTE(port): it stands in "Cards" in the Swift, before `layerFrames`; `settleSheets` here takes it first.
+    /// (`settleSheets` takes it first.)
     struct LayerFrame {
         Vec2 origin = Vec2::zero();
         float gather = 1;
@@ -1035,7 +1027,6 @@ private:
     EntityRef handsNote;
     std::string handsNoteWords;
     double handsNoteAt = 0.0;
-    // NOTE(port): a FileHandle in the Swift.
     std::FILE* handsLog = nullptr;
     std::string nearestTip;                             // the fingertip nearest the step cards, where it is on them
 
@@ -1088,7 +1079,7 @@ private:
 
     // MARK: - Cards
 
-    /// A card's two sizes: the Swift's `(small: SIMD2<Float>, open: SIMD2<Float>)`.
+    /// A card's two sizes.
     struct Bodies {
         Vec2 small;
         Vec2 open;
@@ -1104,19 +1095,19 @@ private:
     /// layers off the edge.
     std::vector<LayerFrame> layerFrames(const Tree& tree) const;
 
-    /// Where a node rests: the Swift's `(xy: SIMD2<Float>, depth: Int, pan: Float, scale: Float, float: Float, visible: Bool)`.
+    /// Where a node rests.
     struct Rest {
         Vec2 xy;
         int depth;
         float pan;
         float scale;
-        float float_;           // NOTE(port): `float` in the Swift; a C++ keyword
+        float float_;           // `float` is a C++ keyword, hence the underscore.
         bool visible;
     };
     /// Where a node rests in the view before the view's pan: its place on
     /// its layer, through how that layer lies; how large its place in a
     /// condensed group makes it, and how far it floats.
-    /// (`frames` is null where the Swift leaves it out.)
+    /// (`frames` is null when not given.)
     Rest rest(const TreeNode& n, const Tree& tree, const std::vector<LayerFrame>* frames = nullptr) const;
 
     /// Where a node rests right now (ignoring any motion of its own).
@@ -1146,14 +1137,14 @@ private:
     /// Shows an open work from its own file, at full size, as soon as it is read.
     void showFull(CardView& c);
 
-    // NOTE(port): added for Quest (core/cards). Under `-cards` the ocean's pieces are cards, which ask for their
+    // Under `-cards` the ocean's pieces are cards, which ask for their
     // pictures by address and are drawn anew in place when one comes or when the tree's say on them changes.
     /// Puts what the tree says of a node on its card: a suggestion is a pick, and the root starts the tree.
     void seatCard(CardView& c, const TreeNode& n);
     /// Draws a card's faces again where they stand. A face drawn anew takes the old one's place once it is
     /// painted (`repaintCards`, each frame), so the card never shows an empty face in between.
     void redrawCard(CardView& c);
-    /// NOTE(port): added for Quest (core/cards). A card that was composing has its finished look: the finished card
+    /// A card that was composing has its finished look: the finished card
     /// is made where it stands, the in-progress card eases to its size under it, and the finished card comes up inside
     /// it. Nothing fades out and back in.
     void settleCard(int id);
@@ -1200,7 +1191,7 @@ private:
     /// zoomed into a card, that card is the middle.
     Vec2 panTarget(const Tree& tree) const;
 
-    /// Where a picture sits: the Swift's `(center: SIMD2<Float>, size: SIMD2<Float>)`.
+    /// Where a picture sits.
     struct PictureFrame {
         Vec2 center;
         Vec2 size;
@@ -1213,7 +1204,7 @@ private:
 
     // MARK: - Threads
 
-    /// A point as you see it: the Swift's `(at: SIMD2<Float>, depth: Float)`.
+    /// A point as you see it.
     struct Seen {
         Vec2 at;
         float depth;
@@ -1230,7 +1221,7 @@ private:
     /// to `hi`: out through its nearest side.
     Vec2 clear(Vec2 at, Vec2 lo, Vec2 hi) const;
 
-    /// A box as you see it, or on a sheet: the Swift's `(lo: SIMD2<Float>, hi: SIMD2<Float>)`.
+    /// A box as you see it, or on a sheet.
     struct Reach {
         Vec2 lo;
         Vec2 hi;
@@ -1327,7 +1318,7 @@ private:
 
     void openLink(int nodeID);
 
-    // NOTE(port): added for Quest (core/cards). An open card's panel scrolls inside its frame (`-cards`).
+    // An open card's panel scrolls inside its frame (`-cards`).
     /// Scrolls an open card's panel to `offset` px from its top, held to its range, and moves what is shown on it.
     void scrollCard(CardView& c, float offset);
     void solid(const EntityRef& quad);
@@ -1343,7 +1334,7 @@ private:
     static constexpr bool openFoldsAway = true;
     bool foldedOntoOpen(const TreeNode& n, const Tree& tree) const;
 
-    // NOTE(port): added for Quest (core/cards). What the pen marks on a service card, kept with the card by the service
+    // What the pen marks on a service card, kept with the card by the service
     /// (oceanmodel_edits.cpp). With the pen up, a drag on the card gone into begins one: a highlight on words, a line
     /// anywhere else, or a stretch along a video, drawn as Kai's mark is (`markBegin`, `keepStretch`). What it was claimed for.
     Press::Claim beginMark(CardView& c, Vec2 at);
@@ -1391,10 +1382,10 @@ private:
     Vec3 facePoint(const CardView& c, Vec2 at) const;
     /// Pinches the open card by flag, as a hand would: held `hold` s at the path's start, then drawn along it over `over` s.
     void pinchByFlag(const std::vector<Vec2>& path, double hold, double over);
-    /// NOTE(port): added for Quest. Logs where each card on the layer you work on is headed, and the room it takes there
+    /// Logs where each card on the layer you work on is headed, and the room it takes there
     /// (`-placesAt`), for checking an arrangement without pictures.
     void logPlaces() const;
-    /// NOTE(port): added for Quest. Logs what is drawn within 2 mm of something else along the eye's sight (`-depthAuditAt`).
+    /// Logs what is drawn within 2 mm of something else along the eye's sight (`-depthAuditAt`).
     void depthAudit() const;
     bool cardGestures = false;
 
@@ -1462,7 +1453,7 @@ private:
         int picks = 0;                  // AGENT: how many it shows once every picture has come (`shownPlan`)
         float foot = 0;                 // m from the cover's middle down to the tree's foot
         float top = 0;                  // m from the cover's middle up to its highest picture
-        // NOTE(port): added for Quest: how its tree is drawn, in the small tree's measure (see `Becoming`).
+        // How its tree is drawn, in the small tree's measure (see `Becoming`).
         int layers = 1;
         float treeFoot = 0.03f, treeRise = 0.055f;
     };
@@ -1476,9 +1467,9 @@ private:
     /// Where pictures float round a cover's tree: m right of the trunk, how far up the cover
     /// (0 its foot … 1 its top), and m toward you. The first is the top left, then round.
     //
-    // NOTE(port): changed for Quest, at Kai's request (2026-11-15): three more, further out, for a tree
-    // that stands on the desk with no tree open ("more content thumbnails in this state"). The Swift has
-    // the first five; here too only those show while a cover lies on the ocean's floor (`usualPictures`).
+    // The last three, further out, are for a tree that stands on the desk with no tree open (Kai, 2026-11-15:
+    // "more content thumbnails in this state"). Only the first five show while a cover lies on the ocean's
+    // floor (`usualPictures`).
     static constexpr std::array<Vec3, 8> coverSlots{Vec3{-0.30f, 0.80f, 0.05f}, Vec3{0.31f, 0.58f, -0.04f}, Vec3{-0.33f, 0.30f, -0.06f},
                                                     Vec3{0.29f, 0.10f, 0.06f}, Vec3{0.06f, 1.12f, -0.07f},
                                                     Vec3{-0.47f, 0.56f, -0.02f}, Vec3{0.47f, 0.33f, 0.03f}, Vec3{0.46f, 0.86f, -0.03f}};
@@ -1525,8 +1516,7 @@ public:
 
 private:
 
-    /// A cover, as `makeCover` gives it: the Swift's
-    /// `(entity: Entity, tilts: [Entity], box: (center: SIMD3<Float>, size: SIMD3<Float>))`.
+    /// A cover, as `makeCover` gives it: its entity, its tilts, and the box round it.
     struct Cover {
         struct Box {
             Vec3 center;
@@ -1535,7 +1525,7 @@ private:
         EntityRef entity;
         std::vector<EntityRef> tilts;
         Box box;
-        float foot = 0;             // NOTE(port): added for Quest: m from its middle down to the tree's foot (`plan.foot`)
+        float foot = 0;             // M from its middle down to the tree's foot (`plan.foot`)
         // What a planted cover is picked by: its trunk, each of its pictures and its name, each a box of
         // its own, so that a hand ray goes between them to the trees that stand behind. (Here its trunk
         // and its name; `shelve` adds the pictures, where they are once drawn in.)
@@ -1555,7 +1545,7 @@ private:
     /// pictures and its name are tipped to face you. Returns the cover,
     /// what on it is tipped, and the box it is picked by.
     ///
-    /// NOTE(port): `planted` is added for Quest: the cover is to stand on the desk, so its name lies in
+    /// `planted`: the cover is to stand on the desk, so its name lies in
     /// front of the tree's foot instead of hanging under it, and nothing of it reaches below the foot.
     std::optional<Cover> makeCover(const Tree& tree, float el, bool planted = false);
 
@@ -1577,13 +1567,13 @@ private:
     /// where it was last put. `hand` is the card already in flight, which
     /// this one meets. (`shelve(_:from:hand:spot:)`)
     ///
-    /// NOTE(port): changed for Quest: it is stood on the desk, among the others (`plot`: where, if it had a place).
+    /// It is stood on the desk, among the others (`plot`: where, if it had a place).
     void shelve(const TreeRef& tree, std::optional<Vec3> from, const MoverRef& hand = nullptr, std::optional<Vec2> known = std::nullopt,
                 std::optional<Vec2> plot = std::nullopt);
 
     /// A cover carried by hand: it follows, at arm's length, around you. (`carry(_:by:)`)
     ///
-    /// NOTE(port): changed for Quest. A tree put away stands on the desk, so a hand slides it across the
+    /// A tree put away stands on the desk, so a hand slides it across the
     /// desk's top: `from` is where the pinch landed and `d` how far the pinched point has moved since, and
     /// what is returned is its new place on the desk (Desk::plot), not degrees round you.
     std::optional<Vec2> carry(int uid, Vec3 from, Vec3 d);
@@ -1595,7 +1585,7 @@ private:
         struct Item {
             Tree::Saved tree;
             Vec2 spot;
-            std::optional<Vec2> plot;       // NOTE(port): added for Quest: where it stands on the desk (key "plot"; left out when not known)
+            std::optional<Vec2> plot;       // Where it stands on the desk (key "plot"; left out when not known)
             static std::optional<Item> from(const Json& j);
             Json json() const;
         };
@@ -1611,7 +1601,7 @@ private:
         static std::optional<ShelfFile> from(const Json& j);
         Json json() const;
     };
-    // NOTE(port): added for Quest. Saved trees read from the shelf file are hung one a frame, the most
+    // Saved trees read from the shelf file are hung one a frame, the most
     // lately saved first, instead of all at once before the first frame: there will be many more of them.
     // Those still to hang, in the file's order (oldest first). Nothing is written back until all are up.
     std::vector<ShelfFile::Item> shelfWaiting;
@@ -1692,7 +1682,7 @@ private:
     /// Carries one card on the layer aside, as a hand would.
     void carryOne();
 
-    /// NOTE(port): added for Quest. Carries the cover `i` along the shelf, as a hand would: a pinch on it, drawn by `d`
+    /// Carries the cover `i` along the shelf, as a hand would: a pinch on it, drawn by `d`
     /// over half a second and let go there.
     void carryCoverByFlag(int i, Vec3 d);
 
@@ -1701,7 +1691,7 @@ private:
 
     void runDemo();
 
-    // NOTE(port): what follows is not in the Swift: how its `cards[id]` and `tree.nodes[id]` are written here.
+    // How `cards[id]` and `tree.nodes[id]` are written here.
 
     /// `cards[id]`: null when there is none. (The reference is to the map's own: copy it before `cards` is changed.)
     const CardRef& card(int id) const {
@@ -1724,7 +1714,7 @@ private:
         auto it = std::find(tree.route.begin(), tree.route.end(), id);
         return it == tree.route.end() ? -1 : int(it - tree.route.begin());
     }
-    /// How Swift writes a mark out in a line of the log (`"\(mark)"`).
+    /// How a mark is written out in a line of the log.
     static std::string described(const Mark& mark);
     /// `a.lowercased() == b.lowercased()`, without making either.
     static bool sameLowercased(const std::string& a, const std::string& b);

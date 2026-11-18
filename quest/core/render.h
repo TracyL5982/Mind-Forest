@@ -1,12 +1,11 @@
 // The renderer: draws a tree of entities (scene.h) with OpenGL ES 3 on the
 // Quest (both eyes in one pass, multiview) and OpenGL 4.1 in the Mac preview.
 //
-// It follows what RealityKit does on visionOS closely enough that the ported
-// sources layer the same way:
+// It layers what it draws the same way throughout:
 // - Everything is unlit. Colours and textures are sRGB, blended in linear light.
 // - Opaque things are drawn first. Transparent things (a material with
 //   `.transparent` blending, a shader-graph material, or anything under an
-//   OpacityComponent below 1) are drawn after, farthest first, ordered by
+//   opacity below 1) are drawn after, farthest first, ordered by
 //   the middle of each mesh's bounds.
 // - A transparent material still writes depth unless it says otherwise
 //   (`writesDepth = false`), and `opacityThreshold` discards texels more

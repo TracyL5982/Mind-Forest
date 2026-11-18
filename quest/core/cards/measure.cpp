@@ -1,4 +1,4 @@
-// A port of the sizing half of agents/client/js/components/shared.js. Keep the two in step: every
+// The sizing half of agents/client/js/components/shared.js, in C++. Keep the two in step: every
 // table and rule here is that file's, and test/footprints.cpp checks the result against the web's
 // own footprints.
 #include "measure.h"

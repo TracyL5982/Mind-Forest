@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Catalog.swift.
+// The catalog (see catalog.h).
 #include "catalog.h"
 
 #include <algorithm>
@@ -9,7 +9,7 @@
 
 namespace {
 
-// MARK: Strings, as Swift has them
+// MARK: Strings
 
 /// `s.unicodeScalars`: the Unicode scalars of a UTF-8 string.
 std::vector<uint32_t> unicodeScalars(const std::string& s) {
@@ -45,8 +45,8 @@ void append(std::string& out, uint32_t v) {
 }
 
 /// `s.count` and `s.prefix(n)`.
-/// NOTE(port): Swift counts Characters (what a reader sees as one letter); these count Unicode
-/// scalars. They are the same unless the text holds combining marks or joined emoji.
+/// These count Unicode scalars, which are what a reader sees as one letter unless the text holds combining
+/// marks or joined emoji.
 int count(const std::string& s) { return int(unicodeScalars(s).size()); }
 
 std::string prefix(const std::string& s, int n) {
@@ -57,7 +57,7 @@ std::string prefix(const std::string& s, int n) {
 }
 
 /// `s.lowercased()`.
-/// NOTE(port): Swift lowers every letter Unicode knows. This lowers Latin (ASCII, Latin-1,
+/// This lowers Latin (ASCII, Latin-1,
 /// Latin Extended-A), Greek and Cyrillic capitals, which is every capital the library's titles
 /// and tag names hold; anything else is left as it is.
 std::string lowercased(const std::string& s) {
@@ -85,7 +85,7 @@ template <class T>
 bool contains(const std::vector<T>& list, const T& item) { return std::find(list.begin(), list.end(), item) != list.end(); }
 
 /// `Int(s)`: digits, with a sign before them if any, and nothing else.
-/// NOTE(port): a Swift Int is 64 bits; a number past an int's range is not read here.
+/// A number past an int's range is not read.
 std::optional<int> parseInt(const std::string& s) {
     size_t i = 0;
     bool negative = false;
@@ -514,7 +514,7 @@ Vec2 Catalog::openSize(const OceanNote& note) const {
     return openSize(note.kind(), note.diagram.has_value(), aspect(note));
 }
 
-// NOTE(port): the Swift's `openSize(_:)` from its switch on, for a kind of note: a card opens as one (core/cards).
+// `openSize` for a kind of note, which a card opens as (core/cards).
 Vec2 Catalog::openSize(OceanNote::Kind kind, bool diagram, float aspect) {
     switch (kind) {
     case OceanNote::Kind::text: return {Metrics::openNoteWidth, diagram ? 0.372f : 0.27f};
@@ -614,7 +614,7 @@ std::vector<Offer> Catalog::offers(const Ref& ref, const std::set<Ref>& held) co
         if (!place) break;
         int f = *place;
         // A note that points at this piece, if there is one; then the pieces nearest it.
-        // (`notes` is kept in the order of its ids, which is the order the Swift sorts it into.)
+        // (`notes` is kept in the order of its ids.)
         const OceanNote* note = nullptr;
         std::string key = ref.key();
         for (const auto& [id, n] : notes) {
@@ -861,7 +861,7 @@ std::vector<int> Catalog::seeds(const Ref& ref) const {
 /// each with the tag that best says why. Never more than three.
 std::vector<Catalog::Tied> Catalog::nearby(const Ref& ref, const std::set<Ref>& held) const {
     std::vector<int> seeded = seeds(ref);
-    // NOTE(port): the Swift walks a Set, in whatever order it gives that run; here, from the lowest piece up.
+    // From the lowest piece up.
     std::set<int> from(seeded.begin(), seeded.end());
     std::map<int, float> score;
     std::map<int, std::pair<float, OceanTag>> best;
@@ -896,7 +896,7 @@ std::vector<Catalog::Tied> Catalog::nearby(const Ref& ref, const std::set<Ref>& 
 /// is one. There is always a question: no card is a dead end.
 std::vector<Ask> Catalog::asks(const Ref& ref, std::optional<int> previous) const {
     std::vector<Ask> out;
-    // NOTE(port): added for Quest: a lesson of the welcome tree is there to be done, not asked about.
+    // A lesson of the welcome tree is there to be done, not asked about.
     if (ref.kind == Ref::Kind::note && ref.id.rfind("welcome", 0) == 0) return out;
     // (Nor are the cards Momo answers with on the walk: they are the walk's own, written in oceanmodel_guide.cpp.)
     if (ref.kind == Ref::Kind::note && ref.id.rfind("momo-", 0) == 0) return out;
@@ -1067,8 +1067,7 @@ std::optional<OceanNote> Catalog::answer(const Mark& mark, const Ref& ref, const
         const std::string& words = mark.text;
         std::string said = lowercased(words);
         // Tags and films the marked words name.
-        // NOTE(port): the Swift takes the tags from a dictionary, so two that gather as many
-        // pieces come in whatever order that run gives; here, in the order of their ids.
+        // Two that gather as many pieces come in the order of their ids.
         std::vector<OceanTag> named;
         for (const auto& [key, tag] : tags) {
             if (contains(said, lowercased(tag.name))) named.push_back(tag);

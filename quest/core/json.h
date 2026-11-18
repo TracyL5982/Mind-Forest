@@ -1,8 +1,8 @@
 // A small JSON value: enough to read the bundled files (ocean.json,
 // clips.json, works.json) and to keep the shelf of saved trees. It stands in
-// for Codable: each ported type reads and writes itself by hand.
+// for a serializer: each type reads and writes itself by hand.
 //
-//   let v = try JSONDecoder().decode(T.self, from: data)   ->  Json j = Json::parse(text); T v = T::from(j);
+//   Json j = Json::parse(text); std::optional<T> v = T::from(j);
 //   j["title"].string()   j["year"].integer(1900)   j["aspect"].number()   j["tags"].array()
 //   j.has("why")          j["missing"].isNull()
 #pragma once

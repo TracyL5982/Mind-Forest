@@ -397,7 +397,7 @@ ImageRef UIGraphicsImageRenderer::image(const std::function<void(Canvas&)>& acti
     return canvas.image();
 }
 
-// MARK: - UIKit's calls, into the current canvas
+// MARK: - The drawing calls, into the current canvas
 
 void setFill(Color color) {
     if (Canvas* c = Canvas::current()) c->setFillColor(color);

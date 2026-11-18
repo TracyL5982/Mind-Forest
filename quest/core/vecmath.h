@@ -1,15 +1,13 @@
-// Vector math for the Quest port: the handful of simd types and functions the
-// visionOS sources use, under the same names where C++ allows it.
+// Vector math for the Quest app: the handful of simd types and functions the
+// scene uses.
 //
-//   SIMD2<Float> -> Vec2      simd_quatf     -> Quat
-//   SIMD3<Float> -> Vec3      simd_float3x3  -> Mat3
-//   SIMD4<Float> -> Vec4      simd_float4x4  -> Mat4
+//   Vec2, Vec3, Vec4, Quat, Mat3, Mat4
 #pragma once
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 
-/// Swift's Float.pi: the float just below pi (float(M_PI) rounds to the one just above).
+/// Pi as a float: the float just below pi (float(M_PI) rounds to the one just above).
 constexpr float floatPi = 0x1.921fb4p+1f;
 
 struct Vec2 {
@@ -275,7 +273,7 @@ inline Mat4 Mat4::inverse() const {
     return out;
 }
 
-/// RealityKit's Transform.
+/// A transform: scale, rotation and translation.
 struct Transform {
     Vec3 scale{1, 1, 1};
     Quat rotation;
@@ -283,7 +281,7 @@ struct Transform {
     Mat4 matrix() const { return Mat4::trs(translation, rotation, scale); }
 };
 
-/// RealityKit's BoundingBox.
+/// An axis-aligned bounding box.
 struct BoundingBox {
     Vec3 min, max;
     Vec3 center() const { return (min + max) * 0.5f; }

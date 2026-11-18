@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Diagrams.swift.
+// The small diagrams drawn on notes (see diagrams.h).
 #include "diagrams.h"
 
 #include <algorithm>
@@ -8,7 +8,7 @@
 
 void Diagrams::draw(const std::string& name, CGRect box, Canvas& ctx, Tone tone, float u, const TextAttributes& caption) {
     ctx.saveGState();
-    // NOTE(port): `defer { ctx.restoreGState() }`: nothing below leaves early, so it is the last line.
+    // Nothing below leaves early, so restoring the state is the last line.
     ctx.setLineWidth(1.6f * u);
     ctx.setLineJoin(Canvas::LineJoin::round);
     ctx.setLineCap(Canvas::LineCap::round);

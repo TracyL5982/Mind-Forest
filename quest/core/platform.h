@@ -1,4 +1,4 @@
-// What the ported sources ask of the machine they run on. Two hosts
+// What the scene asks of the machine it runs on. Two hosts
 // implement this: the Quest (android/, OpenXR) and a Mac preview window
 // (desktop/), which exists so a change can be looked at without the headset.
 #pragma once
@@ -18,7 +18,7 @@ namespace platform {
 // MARK: - Files
 
 /// Where a bundled resource is, or "" if it isn't there. Names are as the
-/// visionOS bundle has them: "ocean.json", "clips/clips.json", "clips/atlas.jpg",
+/// library has them: "ocean.json", "clips/clips.json", "clips/atlas.jpg",
 /// "clips/full/012.mp4", "works/works.json", "works/atlas.jpg", "works/full/<id>.heic".
 ///   Bundle.main.url(forResource: "ocean", withExtension: "json")  -> resourcePath("ocean.json")
 std::string resourcePath(const std::string& name);
@@ -62,7 +62,7 @@ enum class Joint : int {
     littleMetacarpal, littleProximal, littleIntermediate, littleDistal, littleTip,
     count
 };
-// ARKit's names, for the ported gesture code:
+// The joint names the gesture code uses:
 //   .wrist -> wrist                  .thumbTip -> thumbTip
 //   .indexFingerKnuckle -> indexProximal     .indexFingerTip -> indexTip
 //   .middleFingerKnuckle -> middleProximal   .middleFingerTip -> middleTip
@@ -93,7 +93,7 @@ const Hand& hand(int which);
 /// Whether this machine tracks hands at all (HandTrackingProvider.isSupported).
 bool handTrackingSupported();
 
-// MARK: - The room (Quest only: nothing in the Swift)
+// MARK: - The room
 
 // The scene keeps its own space: it is built once, round where the eyes were
 // and the way they faced, and never rebuilt. The host lays that space over the
@@ -134,17 +134,17 @@ std::optional<double> wornAgain();
 
 }  // namespace platform
 
-/// AVPlayer with one item, drawn through a Material::videoMaterial.
+/// A film player with one film, drawn through a Material::videoMaterial.
 class VideoPlayer {
 public:
     virtual ~VideoPlayer() = default;
-    /// player.replaceCurrentItem(with: AVPlayerItem(url:)); an empty path is `replaceCurrentItem(with: nil)`.
+    /// Loads the film at `path`; an empty path unloads it.
     virtual void load(const std::string& path) = 0;
     virtual void play() = 0;
     virtual void pause() = 0;
-    /// player.seek(to:), s.
+    /// Seeks, s.
     virtual void seek(double seconds) = 0;
-    /// player.currentTime().seconds
+    /// Where it is, s.
     virtual double currentTime() = 0;
     /// The item's duration, s; 0 until known.
     virtual double duration() = 0;
@@ -152,7 +152,7 @@ public:
     virtual void setMuted(bool muted) = 0;
     /// Whether it is playing (rate != 0).
     virtual bool playing() = 0;
-    /// Called when the item plays to its end (AVPlayerItem.didPlayToEndTimeNotification), on the frame thread.
+    /// Called when the film plays to its end, on the frame thread.
     std::function<void()> didPlayToEnd;
     /// True once a frame can be drawn.
     virtual bool ready() = 0;

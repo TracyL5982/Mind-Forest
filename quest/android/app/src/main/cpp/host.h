@@ -10,7 +10,7 @@
 #include "platform.h"
 
 namespace host {
-extern std::string mediaDir;        // the visionOS bundle's resources, pushed by tools/push_media.sh
+extern std::string mediaDir;        // the library and the app's media, pushed by tools/push_media.sh
 /// The APK's own assets. The judging build carries the media there (assets/media, listed in its index.txt), and a
 /// resource is then read from the APK as "apk:media/<name>" in place of a file in mediaDir.
 void useAssets(JNIEnv* env, jobject assets);

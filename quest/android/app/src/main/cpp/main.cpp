@@ -1,5 +1,5 @@
 // The Quest app: an OpenXR session with passthrough and hand tracking, and
-// the frame loop that runs the ported scene. One thread does everything
+// the frame loop that runs the scene. One thread does everything
 // (reads head and hands, updates the scene, draws both eyes in one pass),
 // as the scene's code expects.
 //
@@ -11,7 +11,7 @@
 //   -cpuLevel/-gpuLevel <1…4>  power saving, sustained low, sustained high, boost (default 3)
 //   -noBatch             draw every small picture with its own call (to compare)
 //   -uploadBudget <ms>   time a frame may spend sending new pictures to the GPU (default 3)
-//   -dragBy hand         a pinched card follows the hand's own movement (as on visionOS) instead of the system's ray
+//   -dragBy hand         a pinched card follows the hand's own movement instead of the system's ray
 //   -cull <degrees>      skip things further than this from where the head points (default 75; 0 draws all)
 //   -perf                write a line per frame to out/perf.csv and a summary each second to the log
 //   -quitAfter <s>       end the run after this long
@@ -803,7 +803,7 @@ void run() {
             locate.baseSpace = appSpace;
             locate.time = frame.predictedDisplayTime;
             if (XR_FAILED(locateJoints(trackers[i], &locate, &locations)) || !locations.isActive) continue;
-            // Every joint as the system places it, seen or not (see Hands.swift): a fist's fingertips are hidden.
+            // Every joint as the system places it, seen or not (see hands.h): a fist's fingertips are hidden.
             bool any = false;
             for (int j = 0; j < XR_HAND_JOINT_COUNT_EXT; j++) {
                 if (joints[j].locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) any = true;

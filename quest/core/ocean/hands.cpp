@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Hands.swift.
+// The hand gestures (see hands.h).
 #include "hands.h"
 
 #include <algorithm>
@@ -52,9 +52,8 @@ void Hands::start() {
         status = "unsupported on this device";
         return;
     }
-    // NOTE(port): there is no authorization to ask for and no session to run: the app's
-    // manifest asks for hand tracking, and the host has it running by now. So the Swift's
-    // "not allowed" and "failed to start" never come up here.
+    // There is no authorization to ask for and no session to run: the app's manifest asks for hand
+    // tracking, and the host has it running by now.
     tracking = true;
     status = "running";
 }
@@ -65,7 +64,7 @@ std::vector<Hands::Event> Hands::update(Vec3 origin, Vec3 f, float dt) {
     if (!tracking) return {};
     frame = std::max(dt, 1.0f / 240);
     double now = mediaTime();
-    // NOTE(port): `provider.latestAnchors` is the host's two hands, 0 left and 1 right.
+    // The host's two hands, 0 left and 1 right.
     read(platform::hand(0), left, now);
     read(platform::hand(1), right, now);
     std::vector<Event> events;
@@ -109,8 +108,8 @@ void Hands::read(const platform::Hand& anchor, Hand& hand, double now) {
     }
     // Every joint as the system places it, seen or not: the fingertips of a fist are hidden
     // behind the hand, and a hand is no less a fist for that.
-    // NOTE(port): the host gives each joint in world space already, so there is no anchor
-    // transform to carry it through. ARKit's joints by their OpenXR names (platform.h):
+    // The host gives each joint in world space already, so there is no anchor transform to carry it
+    // through. The joints go by their OpenXR names (platform.h):
     // the middle finger's knuckle is its proximal joint.
     auto at = [&](platform::Joint j) { return anchor.at(j); };
     Vec3 wrist = at(platform::Joint::wrist), index = at(platform::Joint::indexTip), middle = at(platform::Joint::middleTip);
@@ -122,10 +121,10 @@ void Hands::read(const platform::Hand& anchor, Hand& hand, double now) {
     hand.tips = {index, middle, ring, little, thumb};
     hand.index = index;
     hand.pinch = distance(thumb, index);
-    // NOTE(port): changed for Quest. OpenXR's fingertip joints lie inside the fingers, so a thumb and
-    // index that touch are still a centimetre or two apart by their joints, and `pinchClosed` (tuned
-    // on ARKit's) is seldom reached. Where the system gives its own reading of the pinch, that is
-    // turned into a distance on the Swift's scale: closed is 0, and `pinchClosed` is two thirds closed.
+    // OpenXR's fingertip joints lie inside the fingers, so a thumb and index that touch are still a
+    // centimetre or two apart by their joints, and `pinchClosed` is seldom reached. Where the system gives
+    // its own reading of the pinch, that is turned into a distance: closed is 0, and `pinchClosed` is two
+    // thirds closed.
     if (anchor.pinchStrength >= 0) hand.pinch = std::min(hand.pinch, (1 - anchor.pinchStrength) * 0.05f);
     hand.tracked = true;
     hand.wrist = wrist;
@@ -133,7 +132,7 @@ void Hands::read(const platform::Hand& anchor, Hand& hand, double now) {
     hand.tip = middle;
     bool wasFist = hand.fist;
     hand.fist = std::all_of(reach.begin(), reach.end(), [](float r) { return r < fistReach; });
-    // NOTE(port): changed for Quest (see `fistGrasp` in hands.h). Where the system says for itself how
+    // (See `fistGrasp` in hands.h.) Where the system says for itself how
     // closed the hand is, a fist needs that reading and every finger curled in, more tightly than
     // `fistReach` asks; a fist already made holds until the hand clearly opens, so one that is
     // carrying the tree is not dropped by a finger loosening.
@@ -143,7 +142,7 @@ void Hands::read(const platform::Hand& anchor, Hand& hand, double now) {
     }
     if (hand.fist) hand.fistLast = now;
     // Flat: every finger out, and held together.
-    // NOTE(port): changed for Quest (2026-11-15, see `knifeStraight` in hands.h). That alone is most open hands,
+    // (2026-11-15, see `knifeStraight` in hands.h.) That alone is most open hands,
     // so the knife asks for more: each finger straight from its knuckle to its tip and in line with the hand,
     // the hand on its edge (the palm facing neither up nor down, neither at you nor away), and the thumb
     // nowhere near a pinch. A knife already held keeps to looser measures, so it does not flicker.
@@ -207,10 +206,10 @@ void Hands::fist(Hand& hand, Vec3 origin, Vec3 f, double now, std::vector<Event>
     // Held a moment first, so a hand closing in passing does nothing.
     if (!(hand.fistSince && now - *hand.fistSince > 0.12)) return;
     if (!(hand.fistAt && hand.fistAxes)) {
-        // NOTE(port): changed for Quest (2026-11-15). The frame is set once, here, and both things a fist does
+        // (2026-11-15.) The frame is set once, here, and both things a fist does
         // are read in it: the shortest line from the fist to the surface in front of it is the normal axis, and
         // the tree is carried in the plane across that line. The scene says what that surface is (`surface`);
-        // without it, ahead and right are as they are where the hand is, as in the Swift.
+        // without it, ahead and right are as they are where the hand is.
         Vec3 v = hand.wrist - origin;
         Vec3 r = normalize(cross(f, Vec3{0, 1, 0}));
         float az = std::atan2(dot(v, r), dot(v, f));
@@ -328,7 +327,7 @@ void Hands::cutLanded() {
 }
 
 void Hands::clap(Vec3 f, double now, std::vector<Event>& events) {
-    // NOTE(port): changed for Quest (see `clapClose` in hands.h): palms together and held, not a clap that lands.
+    // Palms together and held, not a clap that lands (see `clapClose` in hands.h).
     bool both = left.tracked && right.tracked && !left.fist && !right.fist && now > clapUntil;
     // They must come together with the fingers up; once together, the headset sees little of either
     // hand's fingers, so only the palms are asked to stay.
@@ -361,7 +360,7 @@ std::optional<Hands::Held> Hands::held() const {
     return h;
 }
 
-// NOTE(port): added for Quest (see hands.h).
+// See hands.h.
 std::vector<Hands::Grab> Hands::grabs() const {
     std::vector<Grab> out;
     if (quiet) return out;
@@ -387,7 +386,7 @@ std::vector<Hands::Grab> Hands::grabs() const {
     return out;
 }
 
-// NOTE(port): added for Quest (see hands.h).
+// See hands.h.
 std::vector<Hands::Blade> Hands::blades() const {
     std::vector<Blade> out;
     if (quiet) return out;

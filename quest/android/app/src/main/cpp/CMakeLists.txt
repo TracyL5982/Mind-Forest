@@ -6,10 +6,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(OpenXR REQUIRED CONFIG)
 
-# The ported sources and the layer under them, shared with the Mac preview.
+# The scene's sources and the layer under them, shared with the Mac preview.
 set(CORE ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../core)
 # -DOCEAN_SCENE=OFF builds the host with its test scene only (for bringing up the host).
-option(OCEAN_SCENE "Build the ported ocean sources" ON)
+option(OCEAN_SCENE "Build the ocean scene's sources" ON)
 file(GLOB CORE_SOURCES CONFIGURE_DEPENDS ${CORE}/*.cpp)
 if(OCEAN_SCENE)
   file(GLOB OCEAN_SOURCES CONFIGURE_DEPENDS ${CORE}/ocean/*.cpp ${CORE}/agent/*.cpp)

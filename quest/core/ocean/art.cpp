@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Art.swift. (Notes.swift is notes.cpp, Works.swift is works.cpp.)
+// Art: the pictures the cards show. (The notes' layout is notes.cpp, the works' pictures works.cpp.)
 #include "art.h"
 #include "icons.h"
 
@@ -8,7 +8,7 @@
 
 #include "../platform.h"
 
-// NOTE(port): inside Art, `ink`, `label` and `line` are Art's own, so a tone's ink and color and a
+// Inside Art, `ink`, `label` and `line` are Art's own, so a tone's ink and color and a
 // maker's label (free functions in stage.h and catalog.h) are written `::ink(tone)`,
 // `::color(tone)`, `::label(maker)`.
 
@@ -18,7 +18,7 @@ const std::vector<Work>& Art::works() const {
 }
 
 std::shared_ptr<Art> Art::make(const std::shared_ptr<ClipLibrary>& library) {
-    // NOTE(port): the library's folder is a name among the resources, not a path (see library.h).
+    // The library's folder is a name among the resources, not a path (see library.h).
     std::string url = platform::resourcePath(library->folder + "/atlas.jpg");
     ImageRef image = platform::loadImage(url);
     if (!image) return nullptr;
@@ -101,7 +101,7 @@ void Art::still(const Clip& clip, CGRect rect) const {
     drawImage(tile, rect);
 }
 
-// NOTE(port): added for Quest (core/cards). Drawn to the film's own shape, as `still` and `stillMesh` show it,
+// Drawn to the film's own shape, as `still` and `stillMesh` show it,
 // so the film covers it exactly when it plays: the atlas keeps every still at 16:9.
 ImageRef Art::stillPicture(const Clip& clip) const {
     if (clip.tile.size() < 4 || !(clip.aspect > 0)) return nullptr;
@@ -399,7 +399,7 @@ std::optional<Piece> Art::line(const std::string& words, float size, Font::Weigh
     CGSize s = label(words, CGPoint::zero(), f, fg, bg, px(pad.x), px(pad.y), INFINITY, false);
     float r = bg.r, g = bg.g, b = bg.b, a = bg.a;
     float fr = fg.r, fgreen = fg.g, fb = fg.b, fa = fg.a;
-    // Only a name to find the piece by again: its numbers are written as C writes them, not as Swift does.
+    // Only a name to find the piece by again: its numbers are written as C writes them.
     std::string key = "line:" + words + fmt(":%g:%g:%d,%d,%d:%d,%d:%g", double(size), double(rawValue(weight)), int(r * 255), int(g * 255),
                                             int(b * 255), int(fr * 255), int(fa * 100), double(pad.x));
     return piece(key, s.width, s.height, [&](Canvas&, CGSize) {
@@ -772,8 +772,8 @@ Material Art::atlasMaterial() {
 /// few texels a pixel, not from the full one, which costs the GPU
 /// more and shimmers. Said here outright, so it doesn't rest on a default.
 TextureRef Art::sized(const TextureRef& texture) {
-    // NOTE(port): the Swift builds a sampler here (linear between texels and between sizes, clamped
-    // at the edges). The renderer reads every texture that way already, so there is nothing to set.
+    // The renderer reads every texture linear between texels and between sizes, clamped at the edges,
+    // so there is nothing to set.
     return texture;
 }
 

@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Shell.swift.
+// The shell of dust round the room (see shell.h).
 #include "shell.h"
 
 #include <cstddef>
@@ -253,7 +253,7 @@ void Shell::look(Vec3 eye, std::optional<Vec3> forward, float dt) {
         if (std::fabs(target - g) < 0.004f) g = target; else moving += 1;
         if (!(g != grown[i])) continue;
         grown[i] = g;
-        // NOTE(port): added for Quest's sound. A piece is told of once as it swells past a third of the
+        // For the sound: a piece is told of once as it swells past a third of the
         // way, and not again until it has all but gone back: a head held still tells of nothing.
         float share = (g - small) / std::max(large - small, 1e-3f);
         if (!swollen[i]) {

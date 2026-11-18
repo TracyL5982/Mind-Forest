@@ -1,14 +1,11 @@
-// Port of visionos/MindPalace/Ocean/Art.swift, Notes.swift and Works.swift.
-// All three are `Art` (the last two extend it) and the small types beside it;
-// each file's functions are in their own .cpp: art.cpp, notes.cpp, works.cpp.
+// The ocean's pictures (Art), the notes' text layout and the museum works' pictures, with the
+// small types beside them. Their functions are in art.cpp, notes.cpp and works.cpp.
 //
-// NOTE(port): UIKit's drawing is canvas.h. A `CGContext` is a `Canvas&`; a `UIFont` is a `Font`;
-// a dictionary of text attributes is a `TextAttributes`; an `(s as NSString).draw(...)` is
-// `drawString(s, ...)` and `.size(withAttributes:)` is `stringSize(s, ...)`.
-// NOTE(port): the fonts are the host's (SF on the Mac, Roboto on the Quest), so words are not as
-// wide as on visionOS. Nothing here assumes a width: every size is measured, as in the Swift.
-// NOTE(port): a function with defaulted arguments before its last ones (`piece`, `attributes`,
-// `label`, `text`, `line`) takes them in the Swift's order; a call that skips one writes its default.
+// The drawing is canvas.h: a `Canvas&`, a `Font`, `TextAttributes`, `drawString(s, ...)` and `stringSize(s, ...)`.
+// The fonts are the host's (SF on the Mac, Roboto on the Quest), so the same words are not as wide on both.
+// Nothing here assumes a width: every size is measured.
+// A function with defaulted arguments before its last ones (`piece`, `attributes`, `label`, `text`, `line`)
+// takes them in that order; a call that skips one writes its default.
 #pragma once
 #include <cmath>
 #include <functional>
@@ -27,7 +24,7 @@
 #include "catalog.h"
 #include "tree.h"
 
-// MARK: - Art.swift
+// MARK: - Art
 
 /// A drawn piece of a card: its texture, its size in meters, and where its
 /// middle sits from the card's origin.
@@ -37,9 +34,9 @@ struct Piece {
     Vec2 offset = Vec2::zero();
 };
 
-// MARK: - Notes.swift
+// MARK: - Notes
 
-// NOTE(port): TextBlock and NoteLayout open Notes.swift; they stand here, before Art, because a
+// TextBlock and NoteLayout stand here, before Art, because a
 // C++ class has to see the types its functions name.
 
 /// A run of wrapped text on an open note, laid out once and kept: the same
@@ -50,8 +47,7 @@ public:
     const CGPoint origin;               // its top-left corner on the note, in pixels
 
 private:
-    // NOTE(port): `storage`, `manager` and `container` (NSTextStorage, NSLayoutManager,
-    // NSTextContainer) are one TextLayout: no side padding, at most `lines` lines, the last
+    // One TextLayout: no side padding, at most `lines` lines, the last
     // ending in an ellipsis if the string goes on.
     const TextLayout layout;
 
@@ -71,12 +67,12 @@ public:
     struct Words {
         std::string text;
         std::vector<CGRect> rects;
-        /// NOTE(port): added for Quest. Where `text` starts in the block's string, in UTF-16 units.
+        /// Where `text` starts in the block's string, in UTF-16 units.
         int at = 0;
     };
     std::optional<Words> words(CGPoint a, CGPoint b) const;
 
-    /// NOTE(port): added for Quest (core/cards). The rectangles that cover a run of the block's string (UTF-16 units)
+    /// The rectangles that cover a run of the block's string (UTF-16 units)
     /// line by line, in pixels on the note: where a highlight kept with the card is drawn again.
     std::vector<CGRect> rects(int at, int length) const;
 };
@@ -94,7 +90,7 @@ struct NoteLayout {
     CGPoint pixels(Vec2 m) const;
 };
 
-// MARK: - Art.swift
+// MARK: - Art
 
 /// Draws everything that has words on it. Flat rectangles only: a picture, a
 /// dark label, a colored label, in the manner of the reference film. Every
@@ -105,7 +101,7 @@ public:
     static constexpr Color ink = Color::hex(0x0B0D11);          // the dark of labels and panels
     static constexpr Color paper = Color::hex(0xF4F1EA);
     static constexpr Color hot = Color::hex(0xFF5A36);          // the one accent: where you are, what you marked, what you send
-    // NOTE(port): added for Quest. The two greys the Swift writes in place, named so the agent's cards
+    // Two greys, named so the agent's cards
     // (core/cards/paint.h) take the same: the ground a layer's picture is drawn on, and the frame of a picture not there.
     static constexpr Color panel = Color::hex(0x161A21);
     static constexpr Color well = Color::hex(0x20252E);
@@ -119,7 +115,7 @@ public:
         static constexpr float lead = 0.016f;           // the one line to take away; a brief
         static constexpr float title = 0.024f;          // an open card's headline
     };
-    // NOTE(port): added for Quest. How much larger every word in the app is set than the sizes it was chosen at, here
+    // How much larger every word in the app is set than the sizes it was chosen at, here
     // and on the cards (core/cards): on the headset, all of it read "a little small" (2026-11-16). What holds words
     // keeps its size; the words take more of it.
     static constexpr float type = 1.2f;
@@ -136,7 +132,7 @@ private:
     std::map<std::string, Piece> cache;
 
 public:
-    // The museum works (Works.swift): their library, and every one of them small in one picture.
+    // The museum works (works.cpp): their library, and every one of them small in one picture.
     std::shared_ptr<WorkLibrary> workLibrary;
     ImageRef workAtlas;
     TextureRef workAtlasTexture;
@@ -158,8 +154,8 @@ public:
 
     Font font(float m, Font::Weight weight) const { return Font::systemFont(m * type * ppm, weight); }
 
-    /// `piece(_:width:height:ppm:offset:draw:)`. `ppm` and `offset` have defaults in the Swift and
-    /// the closure comes last, so the shorter forms are written out.
+    /// `piece(width, height, ppm, offset, draw)`. `ppm` and `offset` have defaults and the drawing comes
+    /// last, so the shorter forms are written out.
     std::optional<Piece> piece(const std::optional<std::string>& key, float width, float height, float ppm, Vec2 offset,
                                const std::function<void(Canvas&, CGSize)>& draw);
     std::optional<Piece> piece(const std::optional<std::string>& key, float width, float height,
@@ -174,7 +170,7 @@ public:
                                const std::function<void(Canvas&, CGSize)>& draw) {
         return piece(key, width, height, ppm, Vec2::zero(), draw);
     }
-    /// NOTE(port): added for Quest. Lets a kept piece go once nothing will ask for it again: a card drawn anew (core/cards).
+    /// Lets a kept piece go once nothing will ask for it again: a card drawn anew (core/cards).
     void forget(const std::string& key) { cache.erase(key); }
 
     TextAttributes attributes(Font font, Color color, float kern = 0, std::optional<float> lineHeight = std::nullopt,
@@ -231,7 +227,7 @@ public:
     /// number and a few words, large enough to read from there. The same
     /// number-and-name the step cards carry.
     std::optional<Piece> stepLabel(int n, const std::string& words);
-    // NOTE(port): added for Quest (the guide, oceanmodel_guide.cpp). What greets you after the welcome tree's
+    // What greets you after the welcome tree's
     // walk stands free in the room, on no ground of its own: `lettering`, a word in the display face (Fraunces),
     // white and large; `plain`, a line in `face` (its size is `size`), white (or dimmed), likewise on nothing; and `way`, one of the
     // ways to begin: its number on a disc of the accent beside its name, and a line under them. Each is `size`
@@ -241,7 +237,7 @@ public:
     std::optional<Piece> plain(const std::string& words, float size, Font face, float alpha = 1, float ppm = 1200);
     std::optional<Piece> way(int number, const std::string& name, const std::string& note, float size, float ppm = 1200);
     std::optional<Piece> pill(const std::string& words, float size, Color ground = hot);
-    // NOTE(port): added for Quest. A button that is an icon (icons.h: "marker", "eraser", "send") on a rounded
+    // A button that is an icon (icons.h: "marker", "eraser", "send") on a rounded
     // square `size` metres across, the icon in `mark` on `ground`.
     std::optional<Piece> iconButton(const std::string& icon, float size, Color ground, Color mark);
 
@@ -258,7 +254,7 @@ public:
     /// One line under an open card that can be picked: a question for the gardener, or something to do.
     std::optional<Piece> row(const std::string& words);
 
-    // NOTE(port): added for Quest (core/cards): the open card's pills, and the ring round a pinch held still.
+    // The open card's pills, and the ring round a pinch held still.
     /// What can be picked under an open card, as a rounded pill as wide as its words, at most `most` m, in two lines at most.
     std::optional<Piece> questionPill(const std::string& words, float most);
     /// The ring round a pinch held still, filled `step` of `holdSteps` clockwise from the top.
@@ -298,7 +294,7 @@ public:
     /// cards the layer holds.
     ImageRef stepImage(const Ref& ref, const std::shared_ptr<Catalog>& catalog, int more) const;
 
-    // NOTE(port): `blurContext` (a CIContext) has nothing to stand for it: the blur is canvas.h's gaussianBlur.
+    // The blur is canvas.h's gaussianBlur.
 
     /// The same picture, out of focus: how a card under glass looks.
     ImageRef blurred(const ImageRef& image) const;
@@ -329,10 +325,10 @@ public:
 
     /// A rectangle showing one film's still, cut from the atlas.
     MeshRef stillMesh(const Clip& clip, Vec2 size) const;
-    /// NOTE(port): added for Quest. A film's still as a picture of its own, at the film's shape: a card's poster (core/cards).
+    /// A film's still as a picture of its own, at the film's shape: a card's poster (core/cards).
     ImageRef stillPicture(const Clip& clip) const;
 
-    // MARK: - Notes.swift
+    // MARK: - Notes
 
     // Notes: every card that is led by words. A text note, a picture, a video,
     // a chart and a link are all one card with a different middle.
@@ -407,7 +403,7 @@ public:
     /// doubt which one a pinch will land on.
     static Hover hover() { return Hover::highlight(Color::hex(0xFFE2A8), 2.4f); }
 
-    // MARK: - Works.swift
+    // MARK: - Works
 
     // Museum works: the ocean's other kind of piece. A work is a still picture
     // with what the museum knows of it. Small, it is drawn like a film; open,
@@ -436,7 +432,7 @@ private:
 public:
     /// The work's picture at full size, read and made off the main thread's time.
     TextureRef fullTexture(const Work& work) const;
-    // NOTE(port): added for Quest. Unpacking a work's own file takes several frames' time on the
+    // Unpacking a work's own file takes several frames' time on the
     // headset's chip, so both sizes can be asked for ahead (on a background thread) and waited for:
     // the full picture an open work shows, and the small one a small card draws.
     /// Where a work's picture is read from when it is wanted no larger than `pixels`, and the size to ask

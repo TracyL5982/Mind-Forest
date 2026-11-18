@@ -1,5 +1,5 @@
-// Port of visionos/MindPalace/Ocean/Notes.swift: TextBlock, NoteLayout, and the part of Art
-// that draws notes. (Their declarations are in art.h.)
+// The notes' text layout (TextBlock, NoteLayout) and the part of Art that draws notes.
+// (Their declarations are in art.h.)
 #include "art.h"
 
 #include <algorithm>
@@ -12,7 +12,7 @@
 TextBlock::TextBlock(const std::string& string, CGPoint origin, float width, int lines, const TextAttributes& attributes)
     : string(string),
       origin(origin),
-      // NOTE(port): the container is as tall as can be (`.greatestFiniteMagnitude`), has no side
+      // The container is as tall as can be, has no side
       // padding, holds `lines` lines and cuts its tail: all of that is what a TextLayout is.
       layout(string, attributes, CGSize{width, INFINITY}, lines),
       height(std::ceil(layout.usedRect().height())) {}
@@ -32,7 +32,7 @@ std::optional<TextBlock::Words> TextBlock::words(CGPoint a, CGPoint b) const {
         CGPoint local{std::min(std::max(p.x - origin.x, 0.f), layout.containerSize.width - 1), std::min(std::max(p.y - origin.y, 0.f), height - 1)};
         return layout.characterIndex(local);
     };
-    // NOTE(port): `string as NSString`: indices below count UTF-16 code units, as the Swift's do.
+    // Indices below count UTF-16 code units.
     std::u16string ns = utf16(string);
     int length = int(ns.size());
     if (!(length > 0)) return std::nullopt;
@@ -97,8 +97,8 @@ ImageRef Art::picture(const std::string& name) const {
     } else {
         parts = {name.substr(0, dot), name.substr(dot + 1)};
     }
-    // A note's picture is a file in visionos/MindPalace/Resources/Ocean (vertigo-mirror.jpg), which the
-    // app's bundle holds at its top, beside ocean.json: both hosts find it by its bare name.
+    // A note's picture is a file in library/notes (vertigo-mirror.jpg), which the app's media holds beside
+    // ocean.json: both hosts find it by its bare name.
     std::string url = platform::resourcePath(parts.size() > 1 ? parts[0] + "." + parts[1] : parts[0]);
     if (url.empty()) return nullptr;
     ImageRef image = platform::loadImage(url);
@@ -219,14 +219,14 @@ NoteLayout Art::noteLayout(const OceanNote& note, const std::shared_ptr<Catalog>
     std::string kicker = uppercased(kickerWords(note));
     TextAttributes kickerAttributes = attributes(kickerFont, ::color(tone), px(0.001f));
 
-    // `x` and `width` are `pad` and `inner` where the Swift leaves them out.
+    // `x` and `width` are `pad` and `inner` when not given.
     auto block = [&](const std::string& string, float y, float x, float width, int lines, float size, Font::Weight weight, Color color,
                      float lineHeight) {
         return std::make_shared<TextBlock>(string, CGPoint{x, y}, width, lines, attributes(font(size, weight), color, 0, px(lineHeight * type)));
     };
 
-    // NOTE(port): the drawing closures are kept with the layout and run later, so they hold
-    // copies of what they draw (the note among them), where the Swift's hold references.
+    // The drawing closures are kept with the layout and run later, so they hold copies of what they
+    // draw (the note among them).
     switch (note.kind()) {
     case OceanNote::Kind::image:
     case OceanNote::Kind::video: {
@@ -399,8 +399,8 @@ constexpr float glowOut = 0.02f, glowIn = 0.012f;
 /// moved out by `offsets[i]` (in, where it is negative), turning each corner about that corner's own centre,
 /// so all the way round it stays as far from the card's edge; its points carry `uvs[i]`. Each ring is joined
 /// to the next.
-// NOTE(port): changed for Quest. The Swift's glow is one picture of a soft square, stretched to fit, and its gaze
-// rim turns about the card's corner points: both are square where a card's corners are round.
+// A glow that is one picture of a soft square, stretched to fit, or a rim turned about the card's corner points,
+// would be square where a card's corners are round.
 MeshRef bands(Vec2 size, float radius, const std::vector<float>& offsets, const std::vector<Vec2>& uvs) {
     constexpr int arc = 12;                         // pieces of each corner's quarter turn
     float hx = size.x / 2, hy = size.y / 2;
@@ -460,7 +460,7 @@ std::optional<Material> Art::glowLook() {
     Material m = Material::unlit(Color::white());
     m.texture = texture;
     m.transparent = true;
-    // NOTE(port): changed for Quest. Light, as the rim of a look is: it hides nothing. The bands of two cards side by side lie
+    // Light, as the rim of a look is: it hides nothing. The bands of two cards side by side lie
     // at one depth where they meet, and written into the depth buffer they fought over which showed, which flickers.
     m.writesDepth = false;
     m.opacity = 1.0f;

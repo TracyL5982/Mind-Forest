@@ -100,7 +100,7 @@ object CanvasRenderer {
 
     /**
      * A paint that measures and draws the same way at any size: no hinting, glyphs placed between pixels.
-     * `kern`, when given, is UIKit's: so many pixels after every character; given as 0, it turns the
+     * `kern`, when given, is so many pixels after every character; given as 0, it turns the
      * font's own pair kerning off (see TextAttributes in canvas.h).
      */
     private fun textPaint(size: Float, weight: Int, kerned: Boolean, kern: Float): TextPaint {
@@ -224,8 +224,8 @@ object CanvasRenderer {
     }
 
     /**
-     * Android puts half of a letter spacing before each glyph and half after; UIKit puts all of it after.
-     * Drawing this much to the left makes the first glyph start where UIKit's does.
+     * Android puts half of a letter spacing before each glyph and half after; the canvas puts all of it after.
+     * Drawing this much to the left makes the first glyph start where the canvas means it to.
      */
     private fun kernShift(kerned: Boolean, kern: Float): Float = if (kerned) kern / 2 else 0f
 

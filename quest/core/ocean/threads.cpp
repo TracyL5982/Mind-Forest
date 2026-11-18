@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Threads.swift.
+// The threads between cards (see threads.h).
 #include "threads.h"
 
 #include <cstddef>
@@ -55,7 +55,7 @@ void Threads::draw(const std::vector<Thread>& threads, Vec3 eye) {
                 // Every other piece is a gap, as open as `gap` says.
                 float fill = k % 2 == 1 ? 1 - t.gap : 1;
                 if (fill < 0.03f) {
-                    previous = next;        // (the Swift's `defer`)
+                    previous = next;        // (as at the end of the loop)
                     continue;
                 }
                 auto edge = [&](Vec3 p) -> Vec3 {
@@ -71,7 +71,7 @@ void Threads::draw(const std::vector<Thread>& threads, Vec3 eye) {
                 v[base + 2] = LinkVertex{next + e1, rg, ba};
                 v[base + 3] = LinkVertex{next - e1, rg, ba};
                 quads += 1;
-                previous = next;            // (the Swift's `defer`)
+                previous = next;            // (at the end of the loop)
             }
         }
     });

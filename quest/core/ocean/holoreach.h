@@ -1,4 +1,4 @@
-// Not a port: added for Quest. Which finger may work the small tree at your hand (Hologram): only one you can see.
+// Which finger may work the small tree at your hand (Hologram): only one you can see.
 //
 // The small tree stands at about lap height, out of view while you look ahead, and a hand resting there took it and
 // stilled every other input unseen. The user, 2026-11-17: "if I can see the finger, I can interact with the tree, if

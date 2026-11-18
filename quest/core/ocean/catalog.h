@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Catalog.swift.
+// The catalog: every piece of the library (films, works, notes), their tags, and what a card asks about.
 #pragma once
 #include <cmath>
 #include <functional>
@@ -25,11 +25,10 @@
 // list, films first, so that anything worked out from tags (what is near,
 // what came before, what is the opposite) crosses from one kind to the other.
 
-// NOTE(port): JSONDecoder throws when a key a type needs is missing or holds the wrong kind of
-// value, and the whole file is then not read. Every `from` here keeps that: it gives nullopt
-// where the Swift would throw. These are the pieces they are written with. Each returns false
-// where `decode` would throw; the ones that fill an optional are `decodeIfPresent` (a missing
-// key or a null is nil, anything of the wrong kind still fails).
+// A file whose key a type needs is missing or holds the wrong kind of value is not read at all:
+// every `from` here gives nullopt then. These are the pieces they are written with. Each returns
+// false on such a key; the ones that fill an optional are `decodeIfPresent` (a missing key or a
+// null is empty, anything of the wrong kind still fails).
 namespace decode {
 inline bool string(const Json& j, std::string& out) {
     if (!j.isString()) return false;
@@ -66,7 +65,7 @@ inline bool tone(const Json& j, Tone& out) {
     out = *t;
     return true;
 }
-/// SIMD2<Float>: an array of exactly two numbers.
+/// A Vec2: an array of exactly two numbers.
 inline bool vec2(const Json& j, Vec2& out) {
     if (!j.isArray() || j.size() != 2) return false;
     return real(j[0], out.x) && real(j[1], out.y);
@@ -347,8 +346,7 @@ struct Offer {
     bool chip;              // a tag, set beside the open card instead of around it
 };
 
-// NOTE(port): `Ask` and `Mark` stand after the catalog in the Swift, beside the extensions that
-// use them; a C++ class has to see them first.
+// `Ask` and `Mark` stand here because the catalog has to see them first.
 
 // MARK: - Asking
 
@@ -477,18 +475,18 @@ public:
 
     /// An open note, m. Its width never changes; its height goes with what it carries.
     Vec2 openSize(const OceanNote& note) const;
-    /// NOTE(port): added for Quest. The same for a kind of note, which a card opens as (core/cards).
+    /// The same for a kind of note, which a card opens as (core/cards).
     static Vec2 openSize(OceanNote::Kind kind, bool diagram, float aspect);
     static Vec2 pictureSize(float aspect);
 
     /// A piece's tags: what it is about first, each kind's rarest first.
-    /// NOTE(port): `tags(of:)` in the Swift; `tags` is also the field, so the label is kept.
+    /// (`tags` is also the field.)
     std::vector<OceanTag> tagsOf(int piece) const;
 
     std::string title(const Ref& ref) const;
 
     /// A few words for a crumb or a thumbnail.
-    /// NOTE(port): `short` in the Swift; a C++ keyword.
+    /// `short` is a C++ keyword, hence the underscore.
     std::string short_(const Ref& ref) const;
 
     Tone tone(const Ref& ref) const;

@@ -1,4 +1,4 @@
-// Port of visionos/MindPalace/Ocean/Hologram.swift.
+// The small tree at your hand: every layer of the tree, to choose one by finger.
 #pragma once
 #include <functional>
 #include <map>
@@ -26,9 +26,8 @@
 ///   more it matters.
 /// - Branches curve up out of the orb they left, in their branch's colour,
 ///   running from the parent's colour into their own, thicker the more of
-///   the tree hangs from them. (NOTE(port): changed for Quest: drawn in
-///   limbs that run smooth through their cards and branch at an angle;
-///   see `branches`.)
+///   the tree hangs from them, drawn in limbs that run smooth through
+///   their cards and branch at an angle (see `branches`).
 /// - A pane of light lies across it at the layer you work on. With a hand
 ///   over it, it grows a little, every level shows as a ring, and a second
 ///   pane follows the fingers up and down, snapping to the nearest level.
@@ -60,7 +59,7 @@ public:
         bool current = false;
     };
 
-    /// Where a card is right now and its colour: the Swift's `(at: SIMD3<Float>, color: SIMD3<Float>)`.
+    /// Where a card is right now and its colour.
     struct Place {
         Vec3 at;
         Vec3 color;
@@ -154,7 +153,7 @@ public:
     /// Each limb is one ribbon, smooth through its cards and thinner as it climbs. `shown` says where a card
     /// is right now; `thick` makes every branch that many times as thick (a cover hangs far off).
     ///
-    /// (`thick` is 1 when the Swift leaves it out: it stands before arguments that must be given, so it is always written here.)
+    /// (`thick` is 1 unless said otherwise; it stands before arguments that must be given, so it is always written.)
     static void branches(const std::vector<Node>& nodes, float thick, const std::function<std::optional<Place>(int)>& shown, Pen& pen);
 
     /// The tree as it stands, still: its trunk and branches and nothing
@@ -187,8 +186,7 @@ struct Hologram::Pen {
 
     /// A ribbon through `points`, turned to face you. `soft`: brightest along its middle and fading to nothing at its edges, as light does.
     ///
-    /// NOTE(port): `width`, `color` and `alpha` are closures the Swift never keeps, which cost it
-    /// nothing; as std::function each call could allocate, on every branch of every frame the
+    /// `width`, `color` and `alpha` are never kept; as std::function each call could allocate, on every branch of every frame the
     /// tree moves. They are template arguments instead: any callable float -> float (or Vec3).
     template <class Width, class Tint, class Alpha>
     void ribbon(const std::vector<Vec3>& points, Width&& width, Tint&& color, Alpha&& alpha, bool soft) {

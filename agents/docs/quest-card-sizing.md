@@ -33,7 +33,7 @@ The original app's 13.5 mm body is readable on the headset because the Quest 3 h
 
 ## Type scale
 
-The small face is drawn at one web px to one mm at 1.5 m. The opened card keeps the port's `openScale`, 1.198 mm a px (46 cm for the 384 px panel). Quest 3 px are display pixels at 25 PPD (measured).
+The small face is drawn at one web px to one mm at 1.5 m. The opened card keeps the scene's `openScale`, 1.198 mm a px (46 cm for the 384 px panel). Quest 3 px are display pixels at 25 PPD (measured).
 
 | Small face | Web px | mm | Degrees | Quest 3 px, em | Line, px | Weight |
 |---|---|---|---|---|---|---|

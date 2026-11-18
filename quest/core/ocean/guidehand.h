@@ -1,5 +1,5 @@
-// Not a port: there is nothing like it in the visionOS app. The guide's hand and the gestures it shows,
-// carried over line for line from the sketch they were designed in (sketches/onboarding/hand.js and
+// The guide's hand and the gestures it shows,
+// taken line for line from the sketch they were designed in (sketches/onboarding/hand.js and
 // gestures.js, which are not in git: this is now where they live).
 //
 // The hand is the headset's own model of a hand (written out once with `-dumpHandMesh`, kept with the

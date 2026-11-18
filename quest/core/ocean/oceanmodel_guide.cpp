@@ -1,4 +1,4 @@
-// Not a port: there is nothing like it in the visionOS app. The guide: what teaches the hands.
+// The guide: what teaches the hands.
 //
 // The first time, a tree stands by itself: "Welcome to Mind Forest". Its cards are the lessons, one a layer,
 // each playing its gesture on its own face (see "The welcome tree" below). Nothing in it blocks: the next
@@ -93,12 +93,12 @@ const TourStep tourSteps[] = {
 const int tourCount = int(sizeof(tourSteps) / sizeof(tourSteps[0]));
 const int pullStep = 2, moveStep = 3, momoStep = 4, markStep = 5, treeStep = 6, closeStep = 7;
 const char* tourTitle = "Welcome to Mind Forest";
-// NOTE(port): halved, and the card behind it made half see-through, as Kai asked on 2026-11-15: at 0.7 a lesson
+// Halved, and the card behind it made half see-through, as Kai asked on 2026-11-15: at 0.7 a lesson
 // that came up while you were idle took too much of the view, drew the eye and ran into what stood near it.
 const float lessonSize = 0.35f;     // of life size
 const float lessonGround = 0.5f;    // how solid the card behind an idle lesson is
 const float lessonLine = 0.0024f;   // the hand's line at that size, m (drawn small, it wants more weight)
-// NOTE(port): added for Quest: the stage on a lesson's card is as wide as the card's panel and this tall, m: all
+// The stage on a lesson's card is as wide as the card's panel and this tall, m: all
 // that any lesson draws there at its `stage` size fits inside it, seen from where you stand.
 const float lessonStageTall = 0.35f;
 
