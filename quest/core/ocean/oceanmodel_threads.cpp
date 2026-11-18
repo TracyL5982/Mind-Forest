@@ -5,6 +5,12 @@
 #include <limits>
 #include <map>
 
+namespace {
+/// m round the card at a thread's far end that its label keeps out of: about half a label's width across, and its height
+/// and the card's title below.
+constexpr float labelOffX = 0.06f, labelOffY = 0.04f;
+}  // namespace
+
 // MARK: - Threads
 
 /// A point as you see it: how far around to the right and how far up
@@ -463,7 +469,29 @@ void OceanModel::drawThreads(double now, float dt) {
             if (touching.contains(key) && box) {
                 Vec2 room{0.07f, 0.02f};
                 u = 0.58f;
-                while (u < 0.86f && clear(seen(along(u)).at, box->lo - room, box->hi + room) != Vec2::zero()) u += 0.07f;
+                // ... but not onto the card at the thread's other end: on a short thread it would stand over that card's
+                // picture and its title (WS76, the walk's "Pick me up").
+                const CardView* far = nullptr;
+                if (key >= 0) {
+                    far = card(key).get();
+                } else if (tree && size_t(-100 - key) < tree->links.size()) {
+                    const Tree::Link& link = tree->links[size_t(-100 - key)];
+                    if (focus && *focus == link.a) far = card(link.b).get();
+                }
+                // (Its face as drawn: a picture's title can reach wider than the picture.)
+                Vec2 farHalf = far ? far->half : Vec2::zero();
+                if (far && far->smallQuad && far->smallQuad->entity && far->smallQuad->entity->model && far->smallQuad->entity->model->mesh) {
+                    Vec3 drawn = far->smallQuad->entity->model->mesh->bounds.extents() * (far->root->scale.x / 2);
+                    farHalf = {std::max(farHalf.x, drawn.x), std::max(farHalf.y, drawn.y)};
+                }
+                auto offFar = [&](float v) {
+                    if (!far) return true;
+                    Vec2 at = seen(far->position).at, half{farHalf.x + labelOffX, farHalf.y + labelOffY};
+                    return clear(seen(along(v)).at, at - half, at + half) == Vec2::zero();
+                };
+                // (A thread so short that even there it would: its middle, as any other thread's.)
+                if (!offFar(u)) u = 0.5f;
+                while (u < 0.86f && offFar(u + 0.07f) && clear(seen(along(u)).at, box->lo - room, box->hi + room) != Vec2::zero()) u += 0.07f;
             }
             spots.set(key, along(u));
         }

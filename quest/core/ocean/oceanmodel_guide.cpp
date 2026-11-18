@@ -1138,7 +1138,8 @@ void OceanModel::updateTour(double now, Vec3 eye) {
                 CardRef c = n && n->ref.kind == Ref::Kind::work ? card(child) : nullptr;
                 if (!c || c->alpha.target() < 0.5f) continue;
                 signs.rounds.push_back(roundOn(*c, {0, -0.016f}, c->half * 2 + Vec2{0.06f, 0.09f}));
-                Vec3 from = c->point({0, -c->half.y - 0.03f}, 0.02f), to = c->point({0.06f, -c->half.y - 0.26f}, 0.02f);
+                // The way from it begins below the ring, so it never runs across the picture's title (WS76).
+                Vec3 from = c->point({0, -c->half.y - 0.016f - 0.045f - 0.015f}, 0.02f), to = c->point({0.06f, -c->half.y - 0.26f}, 0.02f);
                 signs.flows.push_back(arcBetween(from, to, c->right * 0.05f));
                 std::vector<Vec3> spot = roundOn(*c, {0.06f, -c->half.y * 2 - 0.3f}, c->half * 2, 0.012f, 0.016f);
                 if (spot.size() % 2) spot.pop_back();
