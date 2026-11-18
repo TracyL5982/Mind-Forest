@@ -114,7 +114,6 @@ function voice(opts: { batchMs?: number; answerWaitMs?: number; named?: LiveDeps
       now: () => clock.now,
       idleMs: 60_000,
       batchMs: opts.batchMs ?? 6000,
-      wraps: () => true,
       answerWaitMs: opts.answerWaitMs,
       ...(opts.named ? { named: opts.named } : {}),
       ...(opts.nameWaitMs !== undefined ? { nameWaitMs: opts.nameWaitMs } : {}),
@@ -425,7 +424,7 @@ test('cards of a run this device asked for are walked through: the first at once
   clock.now += 4000;
   v.observed(scout('run1', 'done'));
   v.observed({ t: 'say', text: 'Four new things under Night stairs.', kind: 'results' });
-  assert.match(model.told().at(-1)!, /^\[All done\] The search for "Night stairs" is finished: 4 new cards in all\. Close in one short sentence/);
+  assert.match(model.told().at(-1)!, /^\[All done\] The search for "Night stairs" is finished: 4 new cards in all\. Wrap up/);
   assert.ok(!model.told().some((t) => t.includes('Four new things')), "the run's own closing line is left to the wrap-up");
   model.begins('r4', 'results');
   model.ends('r4');
@@ -469,7 +468,7 @@ test('a newer run on a card Momo is walking through goes on as one run: the olde
   v.observed(scout('newer', 'done'));
   v.observed({ t: 'say', text: 'One new thing under Night stairs.', kind: 'results' });
   const wrap = model.told().at(-1)!;
-  assert.match(wrap, /^\[Wrap up\] The search for "Night stairs" has brought 1 new card\. Close in one short sentence/, 'the wrap-up comes as the run ends, though its picture is still being made');
+  assert.match(wrap, /^\[Wrap up\] The search for "Night stairs" has brought 1 new card\. Wrap up in one or two short sentences/, 'the wrap-up comes as the run ends, though its picture is still being made');
   assert.doesNotMatch(wrap, /finished|All done/, 'a search whose picture is still being made is not called finished');
   assert.ok(!model.told().some((t) => t.includes('One new thing')));
   model.begins('r2', 'results');
@@ -1091,24 +1090,4 @@ test('a check that is slow or fails does not keep Momo waiting: the wake is take
   broken.fail('OpenAI transcription answered 500');
   await tick();
   assert.deepEqual(b.frames.at(-1), { t: 'name', ok: true });
-});
-
-test('a search that ends without a closing line says only what was not told yet, or nothing', () => {
-  const n = new Narration(6000, () => false);
-  const card = (title: string) => ({ anchor: 'a1', kind: 'picture', title, source: 'Rijksmuseum', why: 'The light.' }) as never;
-  n.began('s1', 'a1', 'Night stairs');
-  n.landed(card('One'));
-  assert.match(n.next(0)!, /^\[Card landed\].*React to it in one short sentence/);
-  assert.equal(n.ended('s1'), true);
-  assert.equal(n.next(10_000), null, 'everything was told, and no closing line is due');
-  assert.equal(n.due(), null);
-  n.began('s2', 'a1', 'Night stairs');
-  n.landed(card('Two'));
-  n.next(20_000);
-  n.landed(card('Three'));
-  n.landed(card('Four'));
-  n.ended('s2');
-  const last = n.next(30_000)!;
-  assert.match(last, /^\[More cards landed\] Under "Night stairs", 2 more: .*Make sense of them.*Name three of them at most/);
-  assert.doesNotMatch(last, /All done|Wrap up|Close in/);
 });

@@ -63,8 +63,6 @@ const NAME_WAIT_MS = 2500;
 const BYTES_PER_MS = (RATE * 2) / 1000;
 /** Later cards of a run are gathered into one line at most this often. */
 const BATCH_MS = 6000;
-/** How often a search that ends gets a closing line of hers. */
-const WRAP_CHANCE = 0.3;
 /**
  * Quiet after the last word that ends the turn when the model's turn detection has not, a word being louder than both a floor and
  * three times the quietest moment, as the headset's recorder hears it. The detection waited 2.3 to 2.7 s after short commands; the
@@ -204,8 +202,6 @@ export interface LiveDeps {
   now?: () => number;
   idleMs?: number;
   batchMs?: number;
-  /** Whether a search that ends gets a closing line (by default, `WRAP_CHANCE` of the time). */
-  wraps?: () => boolean;
   /** Quiet after the last word before a turn the turn detection ended is answered (`END_MS`). */
   answerWaitMs?: number;
 }
@@ -259,7 +255,7 @@ Say a few words of your own as you call these ("Keeping that one", "Going up"). 
 # Notes from Mind Forest
 Messages in square brackets come from Mind Forest, not from the user.
 - [Where the user is] says what the user has open. "This" and "it" mean that card.
-- [Card landed], [More cards landed], [All done] and [Wrap up] tell you what a search you started brought. Tell the user right away, like a friend pointing something out, and do what the note asks and no more: a quick reaction to the first card, then one short sentence that makes sense of the ones that follow, naming three at most. It is a warm-up before the user looks for themselves, not a report: never go through cards one by one, and add no question or offer.
+- [Card landed], [More cards landed], [All done] and [Wrap up] tell you what a search you started brought. Tell the user right away, like a friend pointing something out: the first card in a sentence or two, later ones in one short line ("two more: …"), and at [All done] or [Wrap up] a one-sentence wrap-up that says which you would look at first and offers one next step.
 - Never mention the notes themselves ("the note says"): tell what landed as a friend would.
 - Say only what a note says about a card. Never add a fact, date, name or claim about a card that its note does not state, and never describe what a card looks like or shows beyond its note. Your own taste is fine when it is plainly an opinion ("sounds like a rabbit hole").
 - [From the agents] is a line from Mind Forest's other agents for the user. Say it briefly in your own words, and claim nothing it does not say.
@@ -346,11 +342,7 @@ export class Narration {
   private parts = new Map<string, string>();
   private lastTold = Number.NEGATIVE_INFINITY;
 
-  /**
-   * `wraps`: whether a search that ends gets a closing line of hers. Always, unless told otherwise; the live voice closes about
-   * three searches in ten (the user, 2026-11-18: the wrap-up "feels quite templated").
-   */
-  constructor(private readonly batchMs = BATCH_MS, private readonly wraps: () => boolean = () => true) {}
+  constructor(private readonly batchMs = BATCH_MS) {}
 
   /** A Scout run on `anchor` began, as this device asked: a new run, or a newer one on a card whose run is under way. */
   began(step: string, anchor: string, under: string): void {
@@ -393,7 +385,7 @@ export class Narration {
   /** The note to give now, if one is due. */
   next(now: number): string | null {
     const run = this.runs.find((r) => (this.dueAt(r) ?? Number.POSITIVE_INFINITY) <= now);
-    return run ? this.tell(run, now) : null;     // (null too when a search ends with nothing left to say)
+    return run ? this.tell(run, now) : null;
   }
 
   /** When the next note will be due, or null when nothing waits. */
@@ -408,7 +400,8 @@ export class Narration {
     return run.told === 0 ? Number.NEGATIVE_INFINITY : this.lastTold + this.batchMs;
   }
 
-  private tell(run: Run, now: number): string | null {
+  private tell(run: Run, now: number): string {
+    this.lastTold = now;
     if (run.ended) {
       const untold = run.waiting.splice(0);
       const total = run.told + untold.length;
@@ -416,13 +409,6 @@ export class Narration {
       this.finished.set(run.anchor, run.under);
       const working = [...this.parts.values()].includes(run.anchor);
       const cards = `${total} new card${total === 1 ? '' : 's'}`;
-      if (total > 0 && !this.wraps()) {
-        // No closing line: only what has not been told yet, if anything.
-        if (untold.length === 0) return null;
-        this.lastTold = now;
-        return `[More cards landed] Under "${run.under}", ${untold.length} more: ${untold.map(described).join('; ')}. ${SENSE}`;
-      }
-      this.lastTold = now;
       if (total === 0) {
         return working
           ? `[Wrap up] Nothing from the search for "${run.under}" has landed yet. Say so in a few words.`
@@ -430,26 +416,18 @@ export class Narration {
       }
       const rest = untold.length > 0 ? ` Not told yet: ${untold.map(described).join('; ')}.` : '';
       const said = working ? `[Wrap up] The search for "${run.under}" has brought ${cards}.` : `[All done] The search for "${run.under}" is finished: ${cards} in all.`;
-      return `${said}${rest} ${CLOSE}`;
+      return `${said}${rest} Wrap up in one or two short sentences: which you would look at first and why, and one next step to offer. Do not go through them one by one.`;
     }
-    this.lastTold = now;
     if (run.told === 0) {
       const first = run.waiting.shift()!;
       run.told = 1;
-      return `[Card landed] The first card under "${run.under}": ${described(first)}. React to it in one short sentence, from this note only.`;
+      return `[Card landed] The first card under "${run.under}": ${described(first)}. Tell the user about it in one or two short sentences, from this note only.`;
     }
     const more = run.waiting.splice(0);
     run.told += more.length;
-    return `[More cards landed] Under "${run.under}", ${more.length} more: ${more.map(described).join('; ')}. ${SENSE}`;
+    return `[More cards landed] Under "${run.under}", ${more.length} more: ${more.map(described).join('; ')}. Tell the user in one short sentence that names them.`;
   }
 }
-
-/** What she is asked to say of cards that came together: sense made of them, not a list. */
-const SENSE =
-  'Make sense of them for the user in one short sentence, as a quick warm-up before they look for themselves: what these have in common, or how they bear on what was asked. Name three of them at most, and none when the sentence is better without. Ask nothing and offer nothing.';
-/** And, some of the time, at a search's end. */
-const CLOSE =
-  'Close in one short sentence of your own, in a way you have not just used: what ties them together, what surprised you, a question they raise, or where you might start. Never begin "I\'d go with" or "I\'d start with" twice running. Name three cards at most. Offer no next step.';
 
 // ---- the voice
 
@@ -572,7 +550,7 @@ export class LiveVoice {
     private readonly deps: LiveDeps,
     device: (frame: VoiceFrame) => void,
   ) {
-    this.narration = new Narration(deps.batchMs, deps.wraps ?? (() => Math.random() < WRAP_CHANCE));
+    this.narration = new Narration(deps.batchMs);
     // Everything for the device waits while a wake is checked, except the check's own answer.
     this.device = (frame) => {
       if (!this.naming || frame.t === 'name') return device(frame);
