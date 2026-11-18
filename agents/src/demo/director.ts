@@ -94,6 +94,21 @@ export function prunes(words: string, open: boolean): boolean {
   return open || NAMED.test(said);
 }
 
+/**
+ * A spoken turn the director may answer in Momo's place, from a recording. While any is armed, her answer to each spoken turn is
+ * held until the turn's words are written down (2 s at most, in the server's live connection). The first armed one that takes the
+ * turn answers it: her own answer to it never reaches the headset, and her tools for it do nothing.
+ */
+export interface Answer {
+  /** Whether it waits on what the user says next. */
+  armed(): boolean;
+  /**
+   * The turn's words (null when not written down in time) and the card open as it began: true when it answers the turn, having
+   * done what the turn asks (`sayAside` says a recorded line). False leaves the turn, and her held answer, to her.
+   */
+  take(words: string | null, focus: Id | undefined): boolean;
+}
+
 export interface DirectorDeps {
   script: DemoScript;
   /** The folder the script's pictures and films are in. */
@@ -258,6 +273,11 @@ export class Director {
   private heldTree: (Held & { tree: string; kind: HeldKind; sent: boolean }) | null = null;
   /** The nodes of the card whose cut Momo answers (`PRUNED`) that she has answered: each set-up hangs it on a node of its own. */
   private readonly pruned = new Set<Id>();
+  /** The spoken turns the director answers in Momo's place while each is armed. A new one goes here. */
+  private readonly answers: Answer[] = [
+    // Asked to prune Llull's ring, with it open or named: it is cut as the headset cuts it, and she says her line.
+    { armed: () => this.prunable() !== null, take: (words, focus) => words !== null && prunes(words, focus === this.prunable()) && this.pruneAsked() },
+  ];
   /** Until when a line of hers that no take says is being said, so her own voice is kept from the headset meanwhile. */
   private saying = 0;
   /** When each of her recorded lines that is being said now ends on the headset, by its id: a line stopped is over. */
@@ -1156,16 +1176,23 @@ export class Director {
   changed(commands: readonly Command[]): void {
     const node = this.nodes.get(PRUNED.card);
     if (!this.scripted || !node || this.deps.mind.nodes.has(node) || this.pruned.has(node)) return;
-    if (commands.some((command) => command.type === 'deleteNode' && command.id === node)) void this.sayPruned(node);
+    if (commands.some((command) => command.type === 'deleteNode' && command.id === node)) this.sayPruned(node);
+  }
+
+  private sayPruned(node: Id): void {
+    this.pruned.add(node);
+    this.deps.log(`[demo] the card ${PRUNED.card} was cut`);
+    void this.sayAside(PRUNED.said, PRUNED.words);
   }
 
   /**
-   * Momo says her line for the cut of `PRUNED`'s card, with nothing of hers live over it and nothing told her until it ends. A line
-   * of hers being said then, as a take's, is not talked over: hers waits for it to end (the lead's call, 2026-11-17).
+   * Momo says one of her lines said outside any round (`said` in demo/lines.json, by its key, or `fallback` where the file has
+   * none), from its recording, with nothing of hers live over it and nothing told her until it ends. A line of hers being said
+   * then, as a take's, is not talked over: this one waits for it to end (the lead's call, 2026-11-17). A new set-up stops it.
    */
-  private async sayPruned(node: Id): Promise<void> {
-    this.pruned.add(node);
-    const line = this.deps.lines.saying(PRUNED.said) ?? PRUNED.words;
+  async sayAside(key: string, fallback?: string): Promise<void> {
+    const line = this.deps.lines.saying(key) ?? fallback;
+    if (!line) return void this.deps.log(`[demo] Momo has no line "${key}" in demo/lines.json, so says nothing`);
     const spoken = this.deps.lines.ms(line);
     const take = this.take;
     const keep = () => {
@@ -1174,13 +1201,13 @@ export class Director {
     };
     keep();
     for (let ends = this.lineEnds(); ends > Date.now() && take === this.take; ends = this.lineEnds()) {
-      this.deps.log(`[demo] the card ${PRUNED.card} was cut: Momo's line waits ${ends - Date.now()} ms for the one she is saying`);
+      this.deps.log(`[demo] Momo's line "${key}" waits ${ends - Date.now()} ms for the one she is saying`);
       await pause(ends - Date.now() + 100);
       keep();
     }
     if (take !== this.take) return;
-    this.deps.log(`[demo] the card ${PRUNED.card} was cut: Momo says her line`);
-    await this.say(++this.plays, { id: PRUNED.said, kind: 'answer', cards: [], text: line, at: 0, ms: spoken }, 0, 1, () => take !== this.take);
+    this.deps.log(`[demo] Momo says her line "${key}"`);
+    await this.say(++this.plays, { id: key, kind: 'answer', cards: [], text: line, at: 0, ms: spoken }, 0, 1, () => take !== this.take);
   }
 
   /** When the last of her recorded lines being said now ends, or 0 when none is. */
@@ -1200,24 +1227,24 @@ export class Director {
     return this.scripted && node && this.deps.mind.nodes.has(node) && !this.pruned.has(node) ? node : null;
   }
 
-  /** Whether a cut of `PRUNED`'s card would have Momo say her line now, so her answers wait on what the user's words ask. */
-  awaitsPrune(): boolean {
-    return this.prunable() !== null;
-  }
-
-  /** Whether the user's words, said with `focus` open, ask to prune `PRUNED`'s card while its cut would have Momo say her line. */
-  asksToPrune(words: string, focus: Id | undefined): boolean {
-    const node = this.prunable();
-    return node !== null && prunes(words, focus === node);
-  }
-
   /** The user asked Momo to prune `PRUNED`'s card: it is cut as the headset's own cut is, and she says her line. True once done. */
-  pruneAsked(): boolean {
+  private pruneAsked(): boolean {
     const node = this.prunable();
     if (!node) return false;
     const set = this.deps.asDevice(() => this.deps.pipeline.userCommands('Cut', [{ type: 'deleteNode', id: node }]));
-    if (set) void this.sayPruned(node);
+    if (set) this.sayPruned(node);
     return set !== null;
+  }
+
+  /** Whether Momo's answers to spoken turns wait on the turn's words now: an `Answer` of the director's is armed. With rounds not scripted, none is. */
+  holdsAnswers(): boolean {
+    return this.scripted && this.answers.some((answer) => answer.armed());
+  }
+
+  /** A spoken turn's words, or null when not written down in time, with the card open as it began: true when the director answered it in her place. */
+  answerTurn(words: string | null, focus: Id | undefined): boolean {
+    if (!this.scripted) return false;
+    return this.answers.some((answer) => answer.armed() && answer.take(words, focus));
   }
 
   // ---- the roles the demo takes over
