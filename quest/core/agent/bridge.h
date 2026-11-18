@@ -151,6 +151,8 @@ private:
     Plots plots;
     /// Which layer the user last stood on in each, by the service card leading it: read at launch, written with the shelf.
     Stands stands;
+    /// Trees the service deleted, which the headset still shows (standing, or as a cover), by service tree id.
+    std::map<std::string, std::shared_ptr<Tree>> deleted;
     double now = 0;
 
     void synced(const Delta& delta);

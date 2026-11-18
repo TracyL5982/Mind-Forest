@@ -547,6 +547,11 @@ std::vector<Shape> OceanModel::coverCollision(const std::vector<Shape>& trunk, c
 /// where it was last put. `hand` is the card already in flight, which
 /// this one meets.
 void OceanModel::shelve(const TreeRef& tree, std::optional<Vec3> from, const MoverRef& hand, std::optional<Vec2> known, std::optional<Vec2> stood) {
+    // AGENT: one to let go is put away to nothing: what it was pressed into fades where it is (`letGo`).
+    if (tree && lettingGo.erase(tree.get())) {
+        logLine("[ocean] put away and let go: " + tree->title);
+        return;
+    }
     // NOTE(port): added for Quest. There is only ever one welcome tree among the kept ones: the walk taken
     // again (by the next person, or from the gesture sheet) replaces the one put away before.
     if (tree && tree->walk()) {

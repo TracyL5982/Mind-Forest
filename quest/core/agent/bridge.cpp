@@ -303,8 +303,10 @@ void Bridge::changed(const Delta& delta, bool animate, bool yours) {
     for (const TreeInfo& gone : delta.trees.removed) {
         auto p = trees.find(gone.id.value);
         if (p == trees.end()) continue;
-        // A standing tree stays up until it is put away; a cover stays on the shelf. Neither is fed again.
+        // A standing tree stays up until it is put away; a cover stays on the shelf. Neither is fed again. (Kept by its id, so
+        // that a tree coming again with it takes this one's place: `deleted`.)
         logLine("[agent] tree \"" + gone.title + "\" was deleted at the service");
+        deleted[gone.id.value] = p->second.tree;
         trees.erase(p);
         plots.erase(gone.id.value);
         stands.erase(gone.id.value);
@@ -313,6 +315,12 @@ void Bridge::changed(const Delta& delta, bool animate, bool yours) {
 
     std::vector<std::pair<Planted*, const TreeInfo*>> planted;
     for (const TreeId& id : delta.trees.added) {
+        // A tree the service deleted and now makes again (shared and grown back, or the demo's Daily tree): the copy the
+        // headset kept goes, its cover off the desk, or, standing, put away and let go rather than shelved (the lead's call).
+        if (auto old = deleted.find(id.value); old != deleted.end()) {
+            model.letGo(old->second);
+            deleted.erase(old);
+        }
         if (const TreeInfo* info = mirror.tree(id)) {
             if (Planted* p = plant(*info)) planted.emplace_back(p, info);
         }
