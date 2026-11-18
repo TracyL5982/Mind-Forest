@@ -47,12 +47,21 @@ A light is drawn on the hand for the gestures that need feedback: a gauge round 
 
 The service keeps the marks with the card, so they come back on another headset, and "undo" takes back the last change.
 
-**On a tree on the desk**, pointing at it shows two buttons over its crown:
+**On a tree on the desk**, pointing at it shows two square buttons side by side over its crown:
 
-- **Send** asks the service for the tree's handoff, which arrives in the paired Telegram chat as one Markdown file.
-- **Share** asks the hosted service to post a link in your chat. A friend who opens it gets a copy of the tree in their own forest. When sharing cannot happen the button says why, such as "Pair Telegram first".
+- **Send to Agents** asks the service for the tree's handoff, which arrives in the paired Telegram chat as one Markdown file.
+- **Share with Friends** shares the tree (see [Share with Friends](#share-with-friends) below).
 
 **The guide.** On a first launch a welcome tree gives eight lessons, one card each. Six teach a gesture, with a hand that plays it on the card, and two are done by talking to Momo. Afterwards a small ghost hand shows a gesture at the moment it becomes useful, and a Gestures button lists them all.
+
+## Share with Friends
+
+What Share with Friends does depends on the service.
+
+- **On the hosted service**, whose hello says `"share":"telegram"`, it asks at once and stays lit until the service answers. Taken, it says "Sent to your Telegram": the service posts a link in your chat, and a friend who opens it gets a copy of the tree in their own forest. Refused, it says why for 1.8 s, such as "Pair Telegram first", and nothing goes.
+- **On the demo service**, it opens a list of people under itself, each a round picture and a name: the cast of the demo's film. In this repository their pictures are drawn placeholders (`media-src/quest/people`, which `tools/push_media.sh` sends to the headset). Pinching a name shares the tree and the button says "Shared with" and the name. Pinch Share again, or anything else, to shut the list; left alone for 2.5 s it goes with the buttons. A share the demo refuses says "Not shared".
+
+When a share is taken, a copy of the tree's light lifts off the tree, sways, and the wind carries it out of view. The list and the copy are in `core/ocean/oceanmodel_share.cpp`, and the buttons are drawn by `showButtons` in `core/ocean/oceanmodel_desk.cpp`. In the Mac preview: `-hoverCover <i> -hoverCoverAt <s> -coverButton share -coverButtonAt <s> -sharePick 0 -sharePickAt <s>`.
 
 ## Talking to Momo
 
