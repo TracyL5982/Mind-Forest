@@ -63,6 +63,19 @@
      "h": 693
     },
     {
+     "id": "flower-tree",
+     "origin": "ocean",
+     "title": "Flower tree",
+     "text": "A camellia in full bloom over a white fence: one trunk, hundreds of red flowers",
+     "why": "one trunk, hundreds of flowers",
+     "credit": "Your photo · sent to Momo on Telegram",
+     "from": "Telegram",
+     "kind": "picture",
+     "image": "flower-tree.jpg",
+     "w": 1280,
+     "h": 714
+    },
+    {
      "id": "figjam",
      "origin": "ocean",
      "title": "Your FigJam board",
