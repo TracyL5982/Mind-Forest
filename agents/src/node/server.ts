@@ -135,6 +135,8 @@ const READING = new Set(['web_answer', 'look_up_mindstorm', 'go_to', 'connect_te
 const WRITES = new Set<ClientMessage['t']>(['dump', 'utter', 'ask', 'more', 'keep', 'undo', 'commands', 'organize', 'handoff']);
 /** `/live` sockets one metered space keeps: a headset reconnecting while its old socket lingers. A newer one closes the oldest. */
 const LIVE_PER_SPACE = 2;
+/** How long Momo's answer to a spoken turn is held at most, while the demo's prune waits, for the turn's words (the lead's call, 2026-11-17). */
+const PRUNE_HOLD_MS = 2000;
 /** What a metered space takes on /api/transcribe: the Quest's own WAV, of about a minute at most. */
 const RECORDING_BYTES = 2_000_000;
 
@@ -690,6 +692,57 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       : live.webAnswer;
     /** Audio is counted as 16-bit mono: the device's at 16 kHz, Momo's at the live voice's rate. */
     const counted = (pcm: string, rate: number) => meter?.used('voiceMs', ((pcm.length * 3) / 4 / 2 / rate) * 1000);
+    /**
+     * While the demo's prune waits (`Director.awaitsPrune`), Momo's answer to a spoken turn is held until the turn's words are
+     * written down, `PRUNE_HOLD_MS` at most: words that ask to prune the card have the director cut it and say her line, and her own
+     * answer never reaches the headset (the lead's call, 2026-11-17). The turn being heard, with the card open as it began.
+     */
+    let deciding: { turn: number; focus?: string; held: VoiceFrame[]; timer?: ReturnType<typeof setTimeout> } | null = null;
+    /** The turn the director answered, its words, and the ids of Momo's own answers to it: none reaches the headset, and her tools for it do nothing. */
+    let directed: { turn: number; words: string; ids: Set<string> } | null = null;
+    /** Momo's tools that wait for the turn being heard to be settled, since its words may be written down later than a call waits for them. */
+    const settled: (() => void)[] = [];
+    const settling = () => {
+      for (const done of settled.splice(0)) done();
+    };
+    /** Momo's voice to the headset: kept from it while a take's lines are what it hears. */
+    const toDevice = (frame: VoiceFrame) => {
+      // While a round's take is what the headset hears, Momo's own words are kept from it; her reply over, the take is seen to.
+      if (director?.mutes()) {
+        if (frame.t === 'text' || frame.t === 'audio') return;
+        if (frame.t === 'done') director.replied();
+      }
+      if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(frame));
+    };
+    const settle = (words: string | null) => {
+      const d = deciding;
+      if (!d) return;
+      deciding = null;
+      if (d.timer) clearTimeout(d.timer);
+      if (words !== null && director?.asksToPrune(words, d.focus) && director.pruneAsked()) {
+        directed = { turn: d.turn, words, ids: new Set(d.held.flatMap((f) => ('id' in f ? [f.id] : []))) };
+        log(`[demo] turn ${d.turn} asks to prune the card: it is cut and Momo's line said, and her own answer is dropped`);
+        return settling();
+      }
+      settling();
+      if (words === null && d.held.length > 0) log(`[demo] turn ${d.turn}'s words were not written down in ${PRUNE_HOLD_MS} ms: Momo's answer goes on`);
+      for (const f of d.held) toDevice(f);
+    };
+    const gate = (frame: VoiceFrame) => {
+      if (frame.t === 'heard') {
+        toDevice(frame);
+        if (frame.final && deciding?.turn === frame.turn) settle(frame.text);
+        return;
+      }
+      if (frame.t !== 'text' && frame.t !== 'audio' && frame.t !== 'done') return toDevice(frame);
+      if (directed && (directed.ids.has(frame.id) || (frame.t === 'text' && frame.turn === directed.turn))) {
+        directed.ids.add(frame.id);
+        return;
+      }
+      if (!deciding) return toDevice(frame);
+      deciding.held.push(frame);
+      deciding.timer ??= setTimeout(() => settle(null), PRUNE_HOLD_MS);
+    };
     const voice: LiveVoice = new LiveVoice(
       {
         open: live.open,
@@ -697,7 +750,19 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         name: () => spokenName(settings.agentName),
         words: (scene) => likelyWords(mind, scene.treeId ?? null),
         tools: toolSpecs,
-        call: (name, args, scene, said) => {
+        call: async (name, args, scene, said) => {
+          // A tool Momo calls for the turn the director answered does nothing: the card is cut, and her line said.
+          if (deciding || directed) {
+            const before = directed;
+            const words = await said();
+            if (deciding) {
+              deciding.timer ??= setTimeout(() => settle(null), PRUNE_HOLD_MS);
+              await new Promise<void>((done) => settled.push(done));
+            }
+            if (directed && (words === directed.words || (words === undefined && directed !== before))) {
+              return { done: true, note: 'Already done: the card is cut, and that was said. Say nothing more about it.' };
+            }
+          }
           const why = (READING.has(name) ? null : noRoom()) ?? (SEARCHING.has(name) ? meter?.refused('searches') : null);
           if (why) return Promise.resolve({ error: why });
           return asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer, said, contact: telegram ?? undefined }));
@@ -734,12 +799,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
           const why = meter?.refused('voiceMs');
           if (why) return cut(why, frame.id);
         }
-        // While a round's take is what the headset hears, Momo's own words are kept from it; her reply over, the take is seen to.
-        if (director?.mutes()) {
-          if (frame.t === 'text' || frame.t === 'audio') return;
-          if (frame.t === 'done') director.replied();
-        }
-        if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(frame));
+        gate(frame);
       },
     );
     if (own) {
@@ -820,6 +880,12 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         // Past the day's share the turn itself is refused, with its reason said aloud: the check is not spent on it.
         if (meter?.refused('voiceMs')) return void (ws.readyState === ws.OPEN && ws.send(JSON.stringify({ t: 'name', ok: true } satisfies VoiceFrame)));
         counted(frame.pcm, 16000);
+      }
+      if (frame.t === 'start') {
+        // A new turn: what Momo was saying is stopped, so an answer held for the turn before goes nowhere.
+        if (deciding?.timer) clearTimeout(deciding.timer);
+        settling();
+        deciding = director?.awaitsPrune() ? { turn: frame.turn, ...(frame.scene.focus ? { focus: frame.scene.focus } : {}), held: [] } : null;
       }
       voice.heard(frame);
     });
