@@ -81,7 +81,7 @@ void OceanModel::standMore() {
 }
 
 const std::vector<std::string>& OceanModel::momoQuestions() {
-    static const std::vector<std::string> asked = {"Maps of places that don’t exist", "The best worst inventions", "The weirdest things ever sent to space"};
+    static const std::vector<std::string> asked = {"Maps of places that don’t exist", "Chairs that changed how we sit", "The weirdest things ever sent to space"};
     return asked;
 }
 
