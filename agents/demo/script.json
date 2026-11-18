@@ -661,17 +661,17 @@
    "chart": "s47",
    "title": "Round 3 · Draw on a diagram: keep it organized",
    "parent": "n2",
-   "head": "t125",
+   "head": "darwin-tree",
    "say": "so how do we keep the information organized?",
    "sayAlso": [
     "this looks cool but has a lot going on, how do we keep the information organized?"
    ],
    "do": [
-    "Draw on the Neurones poster"
+    "Draw on Darwin's notebook tree"
    ],
    "momo": "Three ways, each on its own card: by time, by branches, or by what stands in front. Examples are under each.",
    "offers": [],
-   "note": "The user's choice (2026-11-17): asked from the Neurones poster. Kai's Linux picture (with its mark) and his note stand in this panel on the board.",
+   "note": "The user's choice (2026-11-17): asked from Darwin's notebook tree (\"I think\"), which Round 2 brings and Momo's opening names. Kai's Linux picture (with its mark) and his note stand in this panel on the board.",
    "cards": [
     {
      "id": "gen-idea-time",
@@ -3191,7 +3191,7 @@
    {
     "id": "s47",
     "phase": "n3",
-    "text": "Round 3 · drawing to annotate on one of the diagrams, “this looks cool but has a lot going on, how do we keep the information organized?”",
+    "text": "Round 3 · drawing on Darwin's notebook tree, “this looks cool but has a lot going on, how do we keep the information organized?”",
     "kind": "ask",
     "x": 608,
     "y": 116,

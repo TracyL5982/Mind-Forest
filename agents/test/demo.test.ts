@@ -91,11 +91,11 @@ test('going to a round builds every round before it, kept, and leaves it the nex
     assert.equal(run.mind.nodes.size, wanted + 1);
     assert.ok([...run.mind.nodes.values()].every((node) => node.status === 'kept'));
     assert.equal(run.demo!.status().armed, 3);
-    // Round 2 hangs from the film Round 1 brought, as the script says, More of this from A disc of pictures, and Round 3 waits on the
-    // Neurones poster with nothing under it.
+    // Round 2 hangs from the film Round 1 brought, as the script says, More of this from A disc of pictures, and Round 3 waits on
+    // Darwin's notebook tree with nothing under it.
     assert.deepEqual(titlesUnder(run, 'Slice of Heartland').sort(), cardsOf('n2').map((card) => card.title).sort());
     assert.deepEqual(titlesUnder(run, 'A disc of pictures').sort(), cardsOf('mo').map((card) => card.title).sort());
-    assert.deepEqual(titlesUnder(run, 'Neurones poster'), []);
+    assert.deepEqual(titlesUnder(run, 'I think'), []);
     // The card's look is chosen with it: a paper is a reference, a picture carries its shape.
     const paper = nodeOf(run, 'Virtual memory palaces: immersion aids recall')!;
     assert.equal(paper.view.component, 'reference');
@@ -116,7 +116,7 @@ test('a request on the card a round is asked from plays that round as the Scout 
   await new Promise((open) => ws.on('open', open));
   try {
     await run.demo!.goto('n3');
-    const head = nodeOf(run, 'Neurones poster')!;
+    const head = nodeOf(run, 'I think')!;
     await run.pipeline.ask(head.id, 'so how do we keep the information organized?');
     await run.pipeline.idle();
     await over(run);
@@ -267,14 +267,14 @@ test('Momo is told, with where the user is, when the next words said on the open
   const run = await boot();
   try {
     await run.demo!.goto('n3');
-    const poster = nodeOf(run, 'Neurones poster')!;
-    assert.match(run.demo!.takeNote(poster.id), /^\nRecording: .*new layer/);
+    const darwin = nodeOf(run, 'I think')!;
+    assert.match(run.demo!.takeNote(darwin.id), /^\nRecording: .*new layer/);
     assert.equal(run.demo!.takeNote(nodeOf(run, 'Corals')!.id), '', 'no round waits on this card, so Momo is told nothing more');
     assert.equal(run.demo!.takeNote(undefined), '');
-    await run.pipeline.more(poster.id);
+    await run.pipeline.more(darwin.id);
     await run.pipeline.idle();
     await over(run);
-    assert.equal(run.demo!.takeNote(poster.id), '', 'the round was played: the card is an ordinary card again');
+    assert.equal(run.demo!.takeNote(darwin.id), '', 'the round was played: the card is an ordinary card again');
     // The one round that brings nothing is answered aloud from its card.
     await run.demo!.goto('bs');
     assert.match(run.demo!.takeNote(nodeOf(run, 'Sources')!.id), /answer aloud/);
@@ -635,15 +635,13 @@ test("Send on a tree hands that tree off to the paired chat as a file: a showcas
 
 // ---- the pruned card
 
-/** The script as the lead is changing it: Round 3 asked from the Neurones poster, so Llull's ring can be cut and the rounds go on. */
-const ringless = { ...script, phases: script.phases.map((phase) => (phase.id === 'n3' ? { ...phase, head: 't125' } : phase)) };
 
 /** The walkthrough with Momo's voice, whose lines are recorded by a stand-in as sound as long as their words. */
 async function prunedDemo(open: OpenRealtime = () => ({ send: () => {}, close: () => {} }), rate = quick.rate): Promise<Running> {
   return startServer({
     port: 0, host: '127.0.0.1', dataDir: fresh(), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret',
     live: { open, options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' } },
-    demo: { script: ringless, mediaDir: join(demoDir, 'media'), pace: { ...quick, rate }, voice: 'test-voice', record: async (text) => ({ pcm: new Uint8Array(text.length * 48 * 50), takes: 1 }) },
+    demo: { script, mediaDir: join(demoDir, 'media'), pace: { ...quick, rate }, voice: 'test-voice', record: async (text) => ({ pcm: new Uint8Array(text.length * 48 * 50), takes: 1 }) },
   });
 }
 
@@ -686,12 +684,12 @@ test("cutting Llull's ring on the headset has Momo say her line once for each se
     assert.equal(lines().length, 1, 'said once, and not for the other card');
 
     // The round after it plays as ever, on its own card.
-    const poster = cardsOf('n2').find((card) => card.id === 't125')!.title;
+    const darwin = cardsOf('n2').find((card) => card.id === 'darwin-tree')!.title;
     await run.demo!.playTake('n3');
     await over(run);
     await run.pipeline.idle();
-    const landed = titlesUnder(run, poster);
-    assert.ok(cardsOf('n3').every((card) => landed.includes(card.title)), 'Round 3 lands under the Neurones poster');
+    const landed = titlesUnder(run, darwin);
+    assert.ok(cardsOf('n3').every((card) => landed.includes(card.title)), "Round 3 lands under Darwin's notebook tree");
 
     // Set up again, the ring is back, and its cut has her say the line again.
     await run.demo!.goto('n3');

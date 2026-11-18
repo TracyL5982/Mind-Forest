@@ -74,8 +74,9 @@ export const WORDS: Record<HeldKind, string> = {
   daily: 'Hi there! I grew a new tree today on the topics you love!',
   shared: 'A friend just shared a tree with you. I planted it right here!',
 };
-/** Momo's question at the walkthrough's end: its key in `said` in demo/lines.json. */
+/** Momo's question at the walkthrough's end, and her reply to whatever the user says next: keys of `said` in demo/lines.json. */
 export const MUSE_CODE = 'museCode';
+export const HANDED_OFF = 'handedOff';
 /** What the bot sends the phone when a tree is shared from the headset (the lead's words, 2026-11-17). */
 export const sharedMessage = (title: string) => `A friend shared a tree with you: “${title}”. Put on your headset to see it grow.`;
 /** The showcase tree the daily tree is unless the page picks another: the user's "rightmost tree", by the lead's reading. */
@@ -286,6 +287,17 @@ export class Director {
   private readonly answers: Answer[] = [
     // Asked to prune Llull's ring, with it open or named: it is cut as the headset cuts it, and she says her line.
     { armed: () => this.prunable() !== null, take: (words, focus) => words !== null && prunes(words, focus === this.prunable()) && this.pruneAsked() },
+    // After her question at the walkthrough's end, the user's next words, whatever they are: she says it is handed off, and
+    // nothing is handed off for real.
+    {
+      armed: () => this.ending.armed,
+      take: () => {
+        this.ending.armed = false;
+        this.deps.log('[demo] the user answered the question about Muse Code: Momo says it is handed off');
+        void this.sayAside(HANDED_OFF);
+        return true;
+      },
+    },
   ];
   /** Until when a line of hers that no take says is being said, so her own voice is kept from the headset meanwhile. */
   private saying = 0;
@@ -571,19 +583,16 @@ export class Director {
 
   /**
    * Momo's question at the walkthrough's end, from her recording (`said.museCode` in demo/lines.json), with its caption: said when
-   * the last round has played to its end, or from the page for another take. Once it is said, the next thing the user says is
-   * to be answered with her recorded reply.
+   * the last round has played to its end, or from the page for another take. The next thing the user says, whatever it is, is
+   * answered with her recorded reply (`said.handedOff`), and her own answer to it is never heard.
    */
   async askMuseCode(): Promise<void> {
-    const text = this.deps.lines.saying(MUSE_CODE);
-    if (!text) this.refuse('demo/lines.json has no question about Muse Code (said.museCode).');
-    this.ending = { asked: true, armed: false };
-    const spoken = this.deps.lines.ms(text);
-    // She is told nothing of what the agents do while it is said.
-    this.quiet = Math.max(this.quiet, Date.now() + spoken + 500);
-    await this.say(++this.plays, { id: MUSE_CODE, kind: 'answer', cards: [], text, at: 0, ms: spoken }, 0, 1, () => false);
-    this.ending.armed = true;
-    this.deps.log('[demo] Momo asked about Muse Code: the next thing the user says is answered with her recorded reply');
+    if (!this.deps.lines.saying(MUSE_CODE)) this.refuse('demo/lines.json has no question about Muse Code (said.museCode).');
+    // Armed as she starts to ask, since a turn already begun when it is armed is not held: a reply that starts as she ends is
+    // answered too, after her question.
+    this.ending = { asked: true, armed: true };
+    this.deps.log('[demo] Momo asks about Muse Code: the next thing the user says is answered with her recorded reply');
+    await this.sayAside(MUSE_CODE);
   }
 
   /** Says on the page why what was asked is not done, and stops. */
