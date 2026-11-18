@@ -37,6 +37,12 @@ void OceanModel::pinchChanged(const EntityRef& entity, Vec3 point, Vec3 start) {
         // A fist or a flat hand can read as a pinch; it isn't one.
         press = Press{*p, start, mediaTime() < hands->busyUntil, riders};
         press->began = time;
+        if (p->kind == Pick::Kind::guide) pressButton(entity, p->index);
+        // AGENT: a button over a tree in the forest shows pressed too: its pill, which its larger target stands behind.
+        if (p->kind == Pick::Kind::coverButton) {
+            auto s = std::find_if(shelf.begin(), shelf.end(), [&](const Shelved& cover) { return cover.uid == p->index; });
+            if (s != shelf.end() && p->question >= 0 && p->question < 2 && s->pills[size_t(p->question)]) showPressed(s->pills[size_t(p->question)]);
+        }
     }
     press->at = point;
     if (press->cancelled) return;
@@ -107,6 +113,9 @@ void OceanModel::pinchChanged(const EntityRef& entity, Vec3 point, Vec3 start) {
 }
 
 void OceanModel::pinchEnded(Vec3 point) {
+    releaseButton();
+    EntityRef over = releasedOver;
+    releasedOver = nullptr;
     if (!press) return;
     Press p = *press;
     press = std::nullopt;
@@ -138,9 +147,25 @@ void OceanModel::pinchEnded(Vec3 point) {
     // began: a line drawn round something comes back to its start, and was taken for a tap on the card (which
     // closes a card gone into). The Swift asks only how far apart the ends are.
     bool still = std::max(moved, p.reach) < 0.035f;
+    // AGENT: a button over a tree counts a pinch that began on it and lets go with the ray still on its target, however far the
+    // ray went between, as the guide's buttons do (WS73, WS75); one that lets go anywhere else does nothing.
+    if (p.pick.kind == Pick::Kind::coverButton) {
+        std::optional<Pick> under = over ? pick(over) : std::nullopt;
+        bool onIt = under && under->kind == Pick::Kind::coverButton && under->index == p.pick.index && under->question == p.pick.question;
+        if (still || onIt) tap(p.pick);
+        else logLine("[ocean] a pinch left its button before it let go");
+        return;
+    }
     if (marking) {
         markEnd();
         if (!still) return;
+    }
+    // A guide button counts a pinch that began on it and lets go with the ray still on it, however far the ray went
+    // between: the fingers closing move it, and a pinch that seemed to land and did nothing was taken for a dead button
+    // (the lead, WS75). Cards and trees keep to stillness.
+    if (!still && p.pick.kind == Pick::Kind::guide && over) {
+        std::optional<Pick> under = pick(over);
+        if (under && under->kind == Pick::Kind::guide && under->index == p.pick.index) still = true;
     }
     if (still) {
         if (p.pick.kind == Pick::Kind::card) {

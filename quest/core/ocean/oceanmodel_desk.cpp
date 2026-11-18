@@ -503,8 +503,8 @@ void OceanModel::tendHover(double now) {
         if (hoverForced < int(shelf.size())) shelf[size_t(hoverForced)].mover->entity->hovered = 0;
         hoverForced = -1;
     }
-    // The tree a ray rests on most, on the desk (a ray finds no tree on the ocean's floor).
-    int most = -1;
+    // The tree a ray rests on most, on the desk (a ray finds no tree on the ocean's floor), and the one that shows its buttons.
+    int most = -1, showing = -1;
     float strongest = 0.3f;
     for (size_t i = 0; i < shelf.size(); i++) {
         if (int(i) == hoverForced) shelf[i].mover->entity->hovered = 1;
@@ -513,25 +513,31 @@ void OceanModel::tendHover(double now) {
             strongest = h;
             most = int(i);
         }
+        if (shelf[i].buttons) showing = int(i);
     }
-    for (size_t i = 0; i < shelf.size(); i++) {
-        Shelved& s = shelf[i];
-        bool served = !forestDown && agentBridge && s.tree && agentBridge->serves(*s.tree);
-        if (served && int(i) == most) s.hoverSeen = now;
-        // (A button that says it took stays its while even when the tree is no longer the service's: a tree shared is taken out
-        // of the forest at once, and its cover stays.)
-        bool keep = (served && s.hoverSeen >= 0 && now - s.hoverSeen < hoverGrace) || (!forestDown && now < s.buttonsUntil);
-        if (keep && !s.buttons) {
-            showButtons(s, -1);
-            logLine("[ocean] Send and Share over " + s.tree->title);
-        } else if (!keep && s.buttons) {
+    auto served = [&](const Shelved& s) { return !forestDown && agentBridge && s.tree && agentBridge->serves(*s.tree); };
+    if (most >= 0 && served(shelf[size_t(most)])) shelf[size_t(most)].hoverSeen = now;
+    // One tree shows them at a time. It keeps them while a ray is anywhere on it or on them (they hang from it, and their
+    // targets reach down to its crown), and `hoverGrace` s after; a button that says it took keeps them its while, even
+    // when the tree is no longer the service's (a tree shared is taken out of the forest at once, and its cover stays).
+    if (showing >= 0) {
+        Shelved& s = shelf[size_t(showing)];
+        bool on = s.mover->entity->hovered > 0.05f || (s.hoverSeen >= 0 && now - s.hoverSeen < hoverGrace);
+        if (!((served(s) && on) || (!forestDown && now < s.buttonsUntil))) {
             logLine("[ocean] Send and Share go from " + s.tree->title);
             for (const EntityRef& b : s.buttons->children) picks.erase(b.get());
             s.tilts.erase(std::remove(s.tilts.begin(), s.tilts.end(), s.buttons), s.tilts.end());
             fadeOut(s.buttons, 0.2f);
             s.buttons = nullptr;
+            s.pills = {};
             s.buttonsUntil = -1;
+            showing = -1;
         }
+    }
+    if (showing < 0 && most >= 0 && served(shelf[size_t(most)])) {
+        showButtons(shelf[size_t(most)], -1);
+        logLine("[ocean] Send and Share over " + shelf[size_t(most)].tree->title);
+        showing = most;
     }
 }
 
@@ -544,34 +550,59 @@ void OceanModel::showButtons(Shelved& s, int pressed) {
         s.tilts.erase(std::remove(s.tilts.begin(), s.tilts.end(), s.buttons), s.tilts.end());
         s.buttons->removeFromParent();
     }
-    // Side by side over the tree's crown, as the app's other buttons look; the one pressed says it took, and takes no press.
+    // Sized by the eye, at the tree's distance: each button's target 12 by 6 degrees, the two side by side and touching, so a
+    // ray between or just round them lands on the nearer one; each pill 4 degrees tall within its target. The targets sit
+    // on the tree's crown, a little toward you, in front of its pictures. (The lead's aims: at least 6 by 12 degrees, the
+    // pills larger, down by the crown. The figures are mine.)
+    float k = std::max(1e-3f, s.mover->scale.target());
+    float crown = s.foot + (s.treeFoot + float(s.layers - 1) * s.treeRise) * coverTree;
+    float d = std::max(0.5f, distance(stage.origin, s.mover->position.target() + stage.u * (crown * k)));
+    float degree = std::tan(float(M_PI) / 180) * d / k;          // m of the tree's own measure that a degree takes there
+    float wide = targetWide * degree, tall = targetTall * degree, pillTall = buttonTall * degree;
+    // The one pressed says it took, and takes no press.
     static const char* names[2] = {"Send", "Share"};
     static const char* done[2] = {"Sent", "Shared"};
-    std::vector<Piece> pieces;
-    for (int k = 0; k < 2; k++) {
-        std::optional<Piece> piece = art->pill(k == pressed ? done[k] : names[k], buttonText);
-        if (!piece) return;
-        pieces.push_back(*piece);
-    }
-    const float gap = 0.014f;
-    float width = pieces[0].size.x + gap + pieces[1].size.x, height = std::max(pieces[0].size.y, pieces[1].size.y);
     EntityRef row = Entity::make();
-    float x = -width / 2;
-    for (int k = 0; k < 2; k++) {
-        EntityRef pill = art->quad(pieces[size_t(k)]);
-        pill->position = {x + pieces[size_t(k)].size.x / 2, 0, 0};
-        pill->collision = {Shape::generateBox({pieces[size_t(k)].size.x, pieces[size_t(k)].size.y, 0.02f})};
-        if (k != pressed) picks[pill.get()] = Pick::coverButton(s.uid, k);
+    row->position = {0, crown + tall / 2, 0.1f};
+    for (int b = 0; b < 2; b++) {
+        std::optional<Piece> piece = art->pill(b == pressed ? done[b] : names[b], buttonText);
+        if (!piece) return;
+        float x = (b == 0 ? -1.f : 1.f) * wide / 2;
+        EntityRef target = Entity::make();
+        target->position = {x, 0, 0};
+        target->collision = {Shape::generateBox({wide, tall, 0.04f})};
+        if (b != pressed) picks[target.get()] = Pick::coverButton(s.uid, b);
+        row->addChild(target);
+        if (Flags::has("showHitAreas")) {
+            if (std::optional<Piece> area = art->piece(fmt("hit-area:%.0fx%.0f", double(wide * Art::ppm), double(tall * Art::ppm)), wide * Art::ppm, tall * Art::ppm,
+                                                       [](Canvas&, CGSize box) {
+                                                           setFill(Color::white(1, 0.22f));
+                                                           UIRectFill(CGRect(0, 0, box.width, box.height));
+                                                           setFill(Color::white(1, 0.6f));
+                                                           UIRectFill(CGRect(0, 0, box.width, 3));
+                                                           UIRectFill(CGRect(0, box.height - 3, box.width, 3));
+                                                           UIRectFill(CGRect(0, 0, 3, box.height));
+                                                           UIRectFill(CGRect(box.width - 3, 0, 3, box.height));
+                                                       })) {
+                EntityRef shown = art->quad(*area);
+                shown->position = {x, 0, -0.002f};
+                row->addChild(shown);
+            }
+        }
+        EntityRef pill = art->quad(*piece);
+        pill->scale = Vec3::repeating(pillTall / piece->size.y);
+        pill->position = {x, 0, 0.004f};
         row->addChild(pill);
-        x += pieces[size_t(k)].size.x + gap;
+        s.pills[size_t(b)] = pill;
     }
-    row->position = {0, s.top + height / 2 + 0.03f, 0.04f};
     holder->addChild(row);
     s.tilts.push_back(row);
     tip({row}, s.el.value(time));
     if (!again) fadeIn(row, 0, 0.2f);
     s.buttons = row;
     touch(time + 0.3);
+    logLine(fmt("[ocean] Send and Share over %s: each a target %.0f° by %.0f°, its pill %.0f° tall, at %.2f m, on the crown", s.tree->title.c_str(),
+                double(targetWide), double(targetTall), double(buttonTall), double(d)));
 }
 
 void OceanModel::coverButton(int uid, int which) {

@@ -239,6 +239,14 @@ int main(int argc, char** argv) {
                 };
                 nx = after("-aimX") * t * aspect;
                 ny = after("-aimY") * t;
+                // `-releaseAimX/-releaseAimY`: where it aims as the pinch lets go, moving there evenly from `-aimX/-aimY`
+                // while it is held, as a hand's ray moves as its fingers close and open.
+                double from = Flags::number("pinchAt"), to = Flags::number("releaseAt");
+                if ((Flags::has("releaseAimX") || Flags::has("releaseAimY")) && from > 0 && to > from && elapsed >= from) {
+                    float k = float(std::min(1.0, (elapsed - from) / (to - from)));
+                    nx += (after("-releaseAimX") - after("-aimX")) * t * aspect * k;
+                    ny += (after("-releaseAimY") - after("-aimY")) * t * k;
+                }
             }
             Vec3 dir = normalize(head.direction({nx, ny, -1}));
             Input::Pointer p;
