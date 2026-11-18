@@ -61,7 +61,7 @@
      "nolli-rome",
      "llull-figure"
     ],
-    "text": "I’d start with the Biotecture tower, because it’s already a literal tree-shaped structure meant to grow, which makes it a perfect bridge between your analogy and a spatial design. Then, as a next step, we could compare it with Darwin’s branching sketch to decide whether your brainstorm feels more like a growing trunk or a diverging canopy."
+    "text": "I’d open Darwin’s 1837 sketch, the one titled “I think,” first. It’s the cleanest bridge from your tree idea into a branching logic for the posters. From there, we can add a contrasting structure, like the Biotecture tower, as a second layer to test how the metaphor shifts in 3D."
    }
   ],
   "mo": [
@@ -69,20 +69,13 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Nice, let’s expand that vibe and pull in some fresh angles around it."
-   },
-   {
-    "id": "first",
-    "kind": "first",
-    "cards": [
-     "t047"
-    ],
-    "text": "A flower of nodes just landed, and it’s a lovely match. It’s one stalk that fans out into hundreds of colored dots, like a network drawn as a flower, which keeps that bursting energy but makes it feel organic."
+    "text": "Nice, let’s spin out another layer from that and see what ideas cluster around it."
    },
    {
     "id": "wrap",
     "kind": "wrap",
     "cards": [
+     "t047",
      "t122",
      "t124",
      "t082",
@@ -96,7 +89,7 @@
      "cajal-neurons",
      "lena-delta"
     ],
-    "text": "There’s a whole constellation of options now, and I’d peek first at “A network grown from its centre” because those thousands of branching routes sound closest to the same bursting-but-structured feeling as the Neurones vibe. If you want, we can keep a couple of your favorites and build the next layer from those."
+    "text": "I’d open “Pictures as a cloud” first. It’s closest to your disc idea, but with a more fluid sense of grouping, which could spark a cleaner way to browse without a fixed path. Then we could pull a second layer that compares “cloud” layouts with networks, so you can see which structure feels right for your headset brainstorming."
    }
   ],
   "n3": [
@@ -104,7 +97,7 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Let’s spin up a fresh layer on that and see what structures fit your poster idea."
+    "text": "Let’s spin this into a new layer on your current card."
    },
    {
     "id": "first",
@@ -112,7 +105,7 @@
     "cards": [
      "tree-ct"
     ],
-    "text": "First up is a film called WoodSwimmer by Brett Foxwell. It’s described as wood being milled away slice by slice, which feels like a neat metaphor for organizing ideas by revealing structure gradually."
+    "text": "First up, a film called \"WoodSwimmer\" by Brett Foxwell. It’s all about wood being milled away, slice by slice, which feels like a neat metaphor for how we can carve complex ideas into clean layers."
    },
    {
     "id": "more-1",
@@ -125,7 +118,7 @@
      "multiplane-camera",
      "paper-peepshow"
     ],
-    "text": "Six more landed, and my favorite is the “Linux file system” picture, with one root and everything hanging from it."
+    "text": "Six more landed, and my pick is the \"Disney’s multiplane camera\" film, because it shows a scene split into painted layers at different depths."
    },
    {
     "id": "more-2",
@@ -133,23 +126,22 @@
     "cards": [
      "gen-idea-time"
     ],
-    "text": "One more landed: a picture called “By time.”"
+    "text": "One more landed: \"By time.\" It says every ask becomes a new layer, with earlier ones fading back and the newest one lit."
    },
    {
     "id": "more-3",
     "kind": "more",
     "cards": [
-     "gen-idea-branches"
+     "gen-idea-branches",
+     "gen-idea-depth"
     ],
-    "text": "Another one landed: a picture called “By branches.”"
+    "text": "Two more landed: \"By branches\" and \"By depth.\" They show different ways to keep paths separate and let newer layers stand out visually."
    },
    {
     "id": "wrap",
     "kind": "wrap",
-    "cards": [
-     "gen-idea-depth"
-    ],
-    "text": "I’d look at “By depth” first, since it matches your poster’s burst feeling by putting the newest layer up front and letting older layers step back. Next, we can open that one and see if its language fits your visual style, then shape the others to match."
+    "cards": [],
+    "text": "I’d look at \"By time\" first, because it gives you a clear, simple rule for what’s in front and what fades back. Then we could pick either \"By branches\" or \"By depth\" and shape your workspace around that metaphor."
    }
   ],
   "f1": [
@@ -879,7 +871,7 @@
     "cards": [
      "t080"
     ],
-    "text": "First up is “A disc of pictures” by Eugene Pylinsky. It’s hundreds of small images packed into one circle so you see everything at once, with no path through it."
+    "text": "First one landed: \"A disc of pictures\" by Eugene Pylinsky, and it’s from your own cards. It’s hundreds of small images packed into a single circle, so you see everything at once with no clear path through."
    },
    {
     "id": "more-1",
@@ -892,19 +884,18 @@
      "t021",
      "llull-figure",
      "darwin-tree",
-     "haeckel-corals"
-    ],
-    "text": "Eight more came in, and I’d go for “Biotecture” first—an intriguing tower drawn like a tree, roots and all."
-   },
-   {
-    "id": "wrap",
-    "kind": "wrap",
-    "cards": [
+     "haeckel-corals",
      "mendeleev-table",
      "cordier-canon",
      "nolli-rome"
     ],
-    "text": "I’d open “Biotecture” first because the tree-like tower feels like a perfect bridge between organic branching and a built structure that could “grow” with your ideas. Next, we could open it and see what kind of brainstorming paths it suggests, or pull in a contrasting model, like the periodic table’s held-open gaps, as a different analogy."
+    "text": "Eleven more just popped in, and my favorite is \"Biotecture,\" a tower drawn like a tree with roots, a building meant to grow."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d open Darwin’s 1837 notebook tree, the sketch titled \"I think,\" first, because it gives you a clean branching structure to build your analogy on. Next, we can sketch how ideas split and re-join in your headset flow from that branching point."
    }
   ],
   "mo": [
@@ -912,7 +903,7 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Nice, let’s riff on that vibe and pull in some fresh angles around it."
+    "text": "Nice, I’ll pull up a fresh layer around that and see what’s nearby."
    },
    {
     "id": "first",
@@ -920,7 +911,7 @@
     "cards": [
      "t047"
     ],
-    "text": "First up, there’s “A flower of nodes,” and it’s a picture from your own cards. It shows one stalk fanning into hundreds of colored dots, a network drawn like a flower."
+    "text": "First up, there’s “A flower of nodes,” and it’s from your own cards. It’s a network drawn like a flower, with one stalk fanning out into hundreds of colored dots."
    },
    {
     "id": "more-1",
@@ -939,13 +930,13 @@
      "cajal-neurons",
      "lena-delta"
     ],
-    "text": "A dozen more just arrived, and I’d start with “Abstract 01” by Marius Watz—it sounds like a grown, thread-like structure that really fits your bursting ideas theme."
+    "text": "Twelve more just arrived, and I’d start with “Pictures as a cloud”—it sounds like a lovely way to see thousands of images gently clustering by likeness."
    },
    {
     "id": "wrap",
     "kind": "wrap",
     "cards": [],
-    "text": "I’d look at “Abstract 01” first because those threads and dots feel closest to the burst of ideas in your poster. If you want, I can help you keep a couple of the strongest matches or pull more like that one."
+    "text": "I’d open “Pictures as a cloud” first, because it stays true to that all-at-once feeling while still hinting at structure through clustering. If you want to keep going, we can either open that one and talk about what it suggests for your brainstorm, or pull in more like it."
    }
   ],
   "f1": [
@@ -1575,7 +1566,7 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Nice angle—let me spin up a fresh layer around that for you."
+    "text": "Interesting angle—let’s build a layer around that and see what it suggests."
    },
    {
     "id": "first",
@@ -1583,7 +1574,7 @@
     "cards": [
      "tree-ct"
     ],
-    "text": "First up, there’s a film called WoodSwimmer by Brett Foxwell, from 2022, from your own cards. It’s described as wood milled away, slice by slice, like a very tactile way to think about structure and layers."
+    "text": "First up is “WoodSwimmer,” a film by Brett Foxwell from 2022, from your own cards. The note says it’s wood milled away, slice by slice, which feels like a very literal, almost meditative kind of organization—structure revealed by careful removal."
    },
    {
     "id": "more-1",
@@ -1596,7 +1587,7 @@
      "paper-peepshow",
      "multiplane-camera"
     ],
-    "text": "Six more just landed, and my favorite is “A tree grows in two directions”—it’s a neat mental model for keeping ideas tidy without flattening them."
+    "text": "Six more arrived, and my favorite is the “Linux file system” card—one root with everything hanging from it is a clean mental model."
    },
    {
     "id": "more-2",
@@ -1604,7 +1595,7 @@
     "cards": [
      "gen-idea-time"
     ],
-    "text": "One more came in, called “By time,” and it shows your layers fading back while the newest one stays lit."
+    "text": "One more popped in: “By time,” which shows each ask as a new layer, with earlier ones fading back and the latest lit."
    },
    {
     "id": "more-3",
@@ -1612,7 +1603,7 @@
     "cards": [
      "gen-idea-branches"
     ],
-    "text": "Another one popped in called “By branches,” where each question splits into its own colored path beside the others."
+    "text": "Another one just landed: “By branches,” where each question forks the path into its own colored branch beside the others."
    },
    {
     "id": "wrap",
@@ -1620,7 +1611,7 @@
     "cards": [
      "gen-idea-depth"
     ],
-    "text": "I’d look at “By depth” first because it matches how your attention actually works in VR, with the newest layer in front and older ones stepping back. If you want, we can keep that one and then compare it with “By branches” to decide which organizing metaphor feels better."
+    "text": "I’d start with “By depth” because it fits the headset vibe: the newest layer in front, older context stepping back behind it. If you like that direction, we can open that card next or pick a couple favorites to keep as your organizing framework."
    }
   ],
   "f4": [
@@ -1709,6 +1700,7 @@
   "daily": "Hi there! I grew a new tree today on the topics you love!",
   "shared": "A friend just shared a tree with you. I planted it right here!",
   "museCode": "Ready to take this to Muse Code, to have your mind forest built out?",
-  "pruned": "Got it—pruning that branch and shifting focus to spatial hierarchy."
+  "pruned": "Got it—pruning that branch and shifting focus to spatial hierarchy.",
+  "handedOff": "Done. It's handed off to Muse Code, with your default preference settings."
  }
 }

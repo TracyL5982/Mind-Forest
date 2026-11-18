@@ -16,6 +16,8 @@
  *             says after it follows from them.
  *   --steer   "<note>": with --only one round, she is given this note just before her answer as its search starts, which she
  *             then says in her own words.
+ *   --wrap    "<note>": with --only one round, she is given this note just before her wrap-up, which she then says in her own
+ *             words.
  *   --openings N: with --only one round, she is asked for that answer alone N times, each in a conversation of its own, and
  *             what she said and how long it took is printed. Nothing is written: the one kept is then given with --answer.
  *   --check   has every recording written out again from its sound, and says where the words differ from the line.
@@ -54,8 +56,10 @@ const answer = args.includes('--answer') ? (args[args.indexOf('--answer') + 1] ?
 const steer = args.includes('--steer') ? (args[args.indexOf('--steer') + 1] ?? '').trim() : '';
 /** How many times she is asked for her answer alone, to choose one from. */
 const openings = args.includes('--openings') ? Number(args[args.indexOf('--openings') + 1]) : 0;
-if ((answer || steer || openings) && only?.size !== 1) {
-  console.error('--answer, --steer and --openings are about the opening line of one round: name that round alone with --only.');
+/** A note she is given before her wrap-up in the round written, which she answers in her own words. */
+const wrapNote = args.includes('--wrap') ? (args[args.indexOf('--wrap') + 1] ?? '').trim() : '';
+if ((answer || steer || openings || wrapNote) && only?.size !== 1) {
+  console.error('--answer, --steer, --wrap and --openings are about one round: name that round alone with --only.');
   process.exit(1);
 }
 if (!env.OPENAI_API_KEY) {
@@ -277,6 +281,7 @@ async function write(phase: ScriptPhase): Promise<Line[]> {
       const written = kind === 'answer' ? answer : '';
       if (written) momo.note(`For this one answer, say these words exactly, word for word and nothing more, then call find_new on the open card. Never say them again later: "${written}"`);
       else if (kind === 'answer' && steer) momo.note(steer);
+      if (kind === 'wrap' && wrapNote) momo.note(wrapNote);
       if (spent.dollars > BUDGET) throw new Error(`this run has spent $${spent.dollars.toFixed(2)}, past its budget of $${BUDGET}`);
       let said = await momo.ask();
       // She may call the search without a word: then she is asked once more for the words that go with it.
