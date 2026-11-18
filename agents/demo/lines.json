@@ -1727,6 +1727,7 @@
  },
  "said": {
   "daily": "Hi there! I grew a new tree today on the topics you love!",
-  "shared": "A friend just shared a tree with you. I planted it right here!"
+  "shared": "A friend just shared a tree with you. I planted it right here!",
+  "pruned": "Got it—pruning that branch and shifting focus to spatial hierarchy."
  }
 }
