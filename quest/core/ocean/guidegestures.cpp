@@ -419,7 +419,7 @@ const std::vector<Gesture>& gestures() {
         {"carry", draw::carry, 5.6f, "Grab to pan", "Close your hand and move it. The tree comes along."},
         {"layers", draw::layers, 7.4f, "Grab to pull or push", "Pull toward you to bring back the layer behind."},
         {"drag", draw::drag, 5.4f, "Pinch and drag to move", "Move at once. It stays where you put it."},
-        {"hold", draw::hold, 6.0f, "Pinch and hold a card", "Hold still until the ring fills: a new layer."},
+        {"hold", draw::hold, 6.0f, "Pinch and hold a card", "Hold still until the ring fills: a new layer around the card."},
         {"mark", draw::mark, 6.8f, "Mark part of a card", "Go in, take up the pen, draw. Send asks Momo."},
         {"tree", draw::tree, 6.0f, "Choose a layer on the small tree", "Slide a finger along it, then pinch."},
         {"clap", draw::clap, 5.4f, "Palms together, and hold", "A second like this closes the tree."},
