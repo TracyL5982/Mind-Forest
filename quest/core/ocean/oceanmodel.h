@@ -657,6 +657,7 @@ private:
         double askedUntil = 0;
         std::function<void()> layerDue;      // the answer's layer, while it waits for her answer to near its end
         int failuresAt = 0;                 // the voice's count of recorded lines that failed, as it was when she began it
+        int walkFrom = -1;                  // the lesson the walk was at last frame, to know when it leaves one of Momo's
         bool tourSent = false;              // the marked part was sent to Momo: what to say about it is waited for
         std::string tourMarkLinks;          // what the card Momo answers a sketch with points to (`tourMarkNote`)
         int tourMarkWork = -1;              // the picture the sketch lesson marks (a work), and the pictures its layer brings
@@ -715,6 +716,8 @@ private:
     /// A line of Momo's recorded ones said: by her voice where she has one, otherwise its sound alone. How long it is, s;
     /// 0 when it can't be said.
     double sayRecorded(const std::string& name);
+    /// WS80: the walk has left one of Momo's two lessons: nothing of hers for it starts after, and what is playing fades.
+    void leaveMomoLesson(int lesson);
     platform::StreamRef walkSound;      // (the sound alone, kept while it plays)
     void tourSend();
     void tourMarkNote(const std::string& words);

@@ -939,6 +939,10 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     }
     int at = teach.tour;
     bool here = lesson == at;
+    if (teach.walkFrom != at) {
+        if (teach.walkFrom == momoStep || teach.walkFrom == markStep) leaveMomoLesson(teach.walkFrom);
+        teach.walkFrom = at;
+    }
     // `-guideDemo tour -guideStep <n>`: walks to the nth lesson by itself, a card every few seconds.
     if (teach.demo && Flags::has("guideStep") && lesson >= 0 && lesson < std::min(tourCount, Flags::integer("guideStep")) - 1 && now >= teach.tourWalkAt) {
         if (std::optional<int> next = tourNode(lesson + 1)) {
@@ -1018,7 +1022,11 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     // taken you to another layer).
     bool canPinchNext = open && nextCard && here;
     static const double autoAfter = Flags::has("guideAutoAfter") ? Flags::number("guideAutoAfter") : 15;
-    if (passing && !zoomed && !busy && !holdDone && now - teach.tourAdvanceAt >= (canPinchNext ? autoAfter : 4.0)) {
+    // (Not out of Momo's two lessons: there the user may still be asking her things, and moves on by hand, card 6 or 7 being
+    // there to pinch. The user, WS80: "this auto-advance feature makes sense for some rounds, just probably not right for
+    // the two rounds that has momo in it".)
+    bool hers = at == momoStep || at == markStep;
+    if (passing && !hers && !zoomed && !busy && !holdDone && now - teach.tourAdvanceAt >= (canPinchNext ? autoAfter : 4.0)) {
         if (std::optional<int> next = tourNode(at + 1)) {
             take(*next);
             return;
@@ -1584,6 +1592,16 @@ void OceanModel::tourAnswer(int lesson, const std::string& words) {
     }
 }
 
+void OceanModel::leaveMomoLesson(int lesson) {
+    logLine(fmt("[guide] the walk left lesson %d: nothing more of Momo's for it", lesson + 1));
+    if (agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr) voice->leaveWalkTurn();
+    // (Her voice alone, with no service: stopped.)
+    if (walkSound) walkSound->stop();
+    walkSound = nullptr;
+    teach.layerDue = nullptr;
+    teach.askedCard = -1;
+}
+
 double OceanModel::sayRecorded(const std::string& name) {
     if (agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr) return voice->tellRecorded(name).value_or(0);
     // No Momo in this copy: her recorded voice alone, with no words shown (the lead, WS78).
@@ -1659,6 +1677,8 @@ void OceanModel::tourSend() {
 
 void OceanModel::endTour(const char* why) {
     if (teach.tour < 0) return;
+    if (teach.tour == momoStep || teach.tour == markStep) leaveMomoLesson(teach.tour);
+    teach.walkFrom = -1;
     teach.tour = -1;
     teach.tourStood = false;
     // Momo's ears are its own again.
