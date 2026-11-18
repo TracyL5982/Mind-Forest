@@ -1,17 +1,17 @@
 # Turn downloaded scenes into what the app plays:
-#   public/clips/full/<n>.mp4   30 s clip with sound, <= 720p (played when a dot is opened)
-#   public/clips/atlas.mp4      every 4 s loop in one 10x10 grid video (played by small dots)
-#   public/clips/atlas.jpg      the atlas's first frame, shown while the video loads
-#   public/clips/clips.json     manifest: tile rects, aspects, start times, film metadata
+#   library/clips/full/<n>.mp4   30 s clip with sound, <= 720p (played when a dot is opened)
+#   library/clips/atlas.mp4      every 4 s loop in one 10x10 grid video (played by small dots)
+#   library/clips/atlas.jpg      the atlas's first frame, shown while the video loads
+#   library/clips/clips.json     manifest: tile rects, aspects, start times, film metadata
 #
 # Each loop is cut from the first seconds of its full clip, so loop time and
 # clip time line up and the app can hand off from one to the other mid-play.
-# Usage: python3 scripts/clips/build.py [--clips-only]   (--clips-only skips the atlas/manifest)
+# Usage: python3 library/tools/clips/build.py [--clips-only]   (--clips-only skips the atlas/manifest)
 import collections, concurrent.futures as cf, json, os, re, subprocess
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 SRC = os.path.join(ROOT, 'media-src')
-OUT = os.path.join(ROOT, 'public', 'clips')
+OUT = os.path.join(ROOT, 'library', 'clips')
 WORK = os.path.join(SRC, 'work')
 FPS = 24
 LOOP = 4.0         # s, loop length (same for every tile)
@@ -186,7 +186,7 @@ GENRE_ORDER = ['Horror', 'Sci-Fi', 'Musical', 'Western', 'Animation', 'War', 'Cr
 def main():
     os.makedirs(os.path.join(OUT, 'full'), exist_ok=True)
     os.makedirs(WORK, exist_ok=True)
-    selection = {f"{f['title']} ({f['year']})": f for f in json.load(open(os.path.join(ROOT, 'scripts/clips/selection.json')))}
+    selection = {f"{f['title']} ({f['year']})": f for f in json.load(open(os.path.join(ROOT, 'library/tools/clips/selection.json')))}
     log = json.load(open(os.path.join(SRC, 'downloads.json')))
     films = []
     for key, entry in log.items():

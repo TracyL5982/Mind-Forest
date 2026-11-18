@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Fetches the picture of every work in selection.json and keeps it small.
 
-    python3 scripts/works/fetch.py
+    python3 library/tools/works/fetch.py
 
 Each picture is asked for at about the size it is kept (where the museum
 serves sizes), turned into a HEIC no longer than 1600 px on its long side
-(public/works/full/<id>.heic, about half a JPEG's weight for the same
+(library/works/full/<id>.heic, about half a JPEG's weight for the same
 detail), and the download is deleted at once: nothing larger ever stays on
 disk. A small JPEG (media-src/works/thumbs) is kept for the atlas.
 What happened to each is written to media-src/works/fetched.json; pictures
@@ -18,9 +18,9 @@ from concurrent.futures import ThreadPoolExecutor
 from PIL import Image
 
 Image.MAX_IMAGE_PIXELS = None
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 SRC = os.path.join(ROOT, "media-src", "works")
-FULL = os.path.join(ROOT, "public", "works", "full")
+FULL = os.path.join(ROOT, "library", "works", "full")
 THUMBS = os.path.join(SRC, "thumbs")
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 LONG = 1600             # px, the kept picture's long side

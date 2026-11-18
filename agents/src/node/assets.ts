@@ -40,7 +40,7 @@ interface Meta {
 }
 
 /** The headset's films, played from the repository. The only folder a linked file may be in. */
-export const LIBRARY_FILMS = resolve(import.meta.dirname, '../../../public/clips/full');
+export const LIBRARY_FILMS = resolve(import.meta.dirname, '../../../library/clips/full');
 
 /** What `/assets/<id>` sends: bytes held here, a file on this host, or a remote address relayed as it streams. */
 export type Stored = { mime: string } & ({ bytes: Uint8Array } | { file: string; size: number } | { url: string });

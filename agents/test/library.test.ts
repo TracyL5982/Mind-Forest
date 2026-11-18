@@ -24,15 +24,15 @@ function fixture(): { repo: string; saved: string } {
     index, title, year, genres: ['Thriller'], cast: ['James Stewart'], videoid, scene: `${title} scene`, description: `What happens in ${title}.`,
     tile: [10 * index, 0, 190, 144], full: { src: `clips/full/${videoid}.mp4` },
   });
-  put('public/clips/clips.json', { atlas: { src: 'clips/atlas.mp4', poster: 'clips/atlas.jpg' }, clips: [clip(0, 'Vertigo', 1958, 'aaaaaaaaaaa'), clip(1, 'Jaws', 1975, 'bbbbbbbbbbb')] });
-  put('public/clips/full/aaaaaaaaaaa.mp4', 'film 0');
-  put('public/clips/full/bbbbbbbbbbb.mp4', 'film 1');
-  put('public/clips/atlas.jpg', 'atlas');
+  put('library/clips/clips.json', { atlas: { src: 'clips/atlas.mp4', poster: 'clips/atlas.jpg' }, clips: [clip(0, 'Vertigo', 1958, 'aaaaaaaaaaa'), clip(1, 'Jaws', 1975, 'bbbbbbbbbbb')] });
+  put('library/clips/full/aaaaaaaaaaa.mp4', 'film 0');
+  put('library/clips/full/bbbbbbbbbbb.mp4', 'film 1');
+  put('library/clips/atlas.jpg', 'atlas');
   const work = (index: number, id: string, title: string) => ({
     index, id, museum: 'The Met', title, maker: 'A maker', date: '1900', year: 1900, place: 'Paris', medium: 'Oil on canvas', kind: 'Painting', about: '', url: `https://museum.example/${id}`, file: `full/${id}.heic`,
   });
-  put('public/works/works.json', { atlas: {}, works: [work(0, 'met-1', 'Stairs'), work(1, 'met-2', 'Mirror')], tags: [{ id: 'watching', name: 'Watching unseen', kind: 'story', works: [1] }] });
-  put('visionos/MindPalace/Resources/ocean.json', {
+  put('library/works/works.json', { atlas: {}, works: [work(0, 'met-1', 'Stairs'), work(1, 'met-2', 'Mirror')], tags: [{ id: 'watching', name: 'Watching unseen', kind: 'story', works: [1] }] });
+  put('library/ocean.json', {
     tags: [{ id: 'hitchcock', name: 'Alfred Hitchcock', kind: 'people', films: [0] }, { id: 'watching', name: 'Watching unseen', kind: 'story', films: [0] }],
     notes: [
       { id: 'zoom', kicker: 'Brief', tone: 'note', headline: 'The face stays put while the world stretches', highlight: '', summary: 'Why a dolly zoom feels like dread.', tags: ['watching'], links: [] },
@@ -83,7 +83,7 @@ test('films, works, notes and tags become library items the headset can draw fro
   assert.deepEqual(vertigo.data.library, { kind: 'film', key: 0 } satisfies LibraryRef);
   assert.equal(vertigo.source.from, 'library');
   assert.equal(vertigo.kind, 'video');
-  assert.equal(k.assets.links.get(/^\/assets\/(.+)$/.exec(vertigo.data.mediaUrl as string)![1]!), join(files.repo, 'public/clips/full/aaaaaaaaaaa.mp4'), 'the film plays from the repository, not a copy');
+  assert.equal(k.assets.links.get(/^\/assets\/(.+)$/.exec(vertigo.data.mediaUrl as string)![1]!), join(files.repo, 'library/clips/full/aaaaaaaaaaa.mp4'), 'the film plays from the repository, not a copy');
   assert.ok(k.assets.files.has(/^\/assets\/(.+)$/.exec(vertigo.data.thumbnailUrl as string)![1]!), 'its still is a stored picture');
   assert.ok(vertigo.tags.includes('alfred hitchcock'), 'its tags are named as on the headset');
 
@@ -146,11 +146,11 @@ test('the import will not write a data folder the running service is using', asy
 });
 
 test('on a Mac, sips turns a real work into a JPEG and cuts a real film still from the atlas', { skip: process.platform !== 'darwin' }, async () => {
-  const pub = join(import.meta.dirname, '../../public');
-  const heic = join(pub, 'works/full/met-258425.heic');
+  const library = join(import.meta.dirname, '../../library');
+  const heic = join(library, 'works/full/met-258425.heic');
 
   const made = await sipsPictures.jpeg([heic], 512);
-  const still = await sipsPictures.crop(join(pub, 'clips/atlas.jpg'), [33, 0, 190, 144]);
+  const still = await sipsPictures.crop(join(library, 'clips/atlas.jpg'), [33, 0, 190, 144]);
 
   assert.deepEqual([...made.get(heic)!.slice(0, 3)], [0xff, 0xd8, 0xff]);
   assert.deepEqual([...still!.slice(0, 3)], [0xff, 0xd8, 0xff]);

@@ -1,14 +1,14 @@
 # Download a 60-second window of each selected Condensed Movies scene.
-# Usage: python3 scripts/clips/download.py [path/to/yt-dlp]
-# Reads scripts/clips/selection.json, writes media-src/<videoid>.mkv and
+# Usage: python3 library/tools/clips/download.py [path/to/yt-dlp]
+# Reads library/tools/clips/selection.json, writes media-src/<videoid>.mkv and
 # media-src/downloads.json (which scene each film ended up with).
 import json, os, subprocess, sys, time
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 YTDLP = sys.argv[1] if len(sys.argv) > 1 else 'yt-dlp'
 SRC = os.path.join(ROOT, 'media-src')
 WINDOW = (3, 63)   # seconds into the scene; skips the channel's opening frames
-films = json.load(open(os.path.join(ROOT, 'scripts/clips/selection.json')))
+films = json.load(open(os.path.join(ROOT, 'library/tools/clips/selection.json')))
 log_path = os.path.join(SRC, 'downloads.json')
 log = json.load(open(log_path)) if os.path.exists(log_path) else {}
 

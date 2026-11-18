@@ -118,7 +118,7 @@ check(firstPicks.every((p) => mind.item(p.itemId).kind !== 'link'), 'no pick is 
 check(mind.picks(filmRoot).every((p) => p.status === 'pick'), 'picks are provisional (dashed) until kept');
 
 step('2. Dump an unrelated thought that asks for a tree, a link, a picture and a chat transcript');
-const picture = await assets.put(new Uint8Array(readFileSync(resolve(root, '../visionos/MindPalace/Resources/Ocean/vertigo-mirror.jpg'))), 'image/jpeg', 'vertigo-mirror.jpg');
+const picture = await assets.put(new Uint8Array(readFileSync(resolve(root, '../library/notes/vertigo-mirror.jpg'))), 'image/jpeg', 'vertigo-mirror.jpg');
 await pipeline.dump([
   { kind: 'text', text: 'Sourdough starter: feed it 1:5:5 at night when the kitchen is cold, 1:2:2 when it is warm. Hydration around 75% for an open crumb. Start a tree on this.' },
   { kind: 'link', url: 'https://en.wikipedia.org/wiki/Jaws_(film)' },

@@ -28,13 +28,11 @@ std::string resourcePath(const std::string& name) {
     std::string path = name.rfind("works-small/", 0) == 0 || name.rfind("sounds/", 0) == 0 || name.rfind("hands/", 0) == 0 || name.rfind("fonts/", 0) == 0 || name.rfind("voice/", 0) == 0
                            ? host::repoRoot + "/media-src/quest/" + name
         : name.rfind("kws/", 0) == 0 ? host::repoRoot + "/quest/vendor/sherpa-onnx/assets/" + name
-        : name.rfind("clips/", 0) == 0 || name.rfind("works/", 0) == 0
-        ? host::repoRoot + "/public/" + name
-        : host::repoRoot + "/visionos/MindPalace/Resources/" + name;
+        : host::repoRoot + "/library/" + name;
     struct stat st;
     if (stat(path.c_str(), &st) == 0) return path;
-    // A note's own picture: the visionOS bundle holds Resources/Ocean's files at its top.
-    path = host::repoRoot + "/visionos/MindPalace/Resources/Ocean/" + name;
+    // A note's own picture is asked for by its name alone: it is in library/notes.
+    path = host::repoRoot + "/library/notes/" + name;
     return stat(path.c_str(), &st) == 0 ? path : "";
 }
 

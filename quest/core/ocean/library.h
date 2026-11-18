@@ -19,7 +19,7 @@
 
 // MARK: - ClipLibrary.swift
 
-// The film scenes, built by scripts/clips/build.py into public/clips and
+// The film scenes, built by library/tools/clips/build.py into library/clips and
 // bundled as the "clips" folder: clips.json, atlas.mp4 (every 4 s loop in one
 // grid video), and full/<id>.mp4 (30 s clips with sound).
 

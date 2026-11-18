@@ -88,7 +88,7 @@ const Replayed = z.array(
 );
 
 export interface LibraryFiles {
-  /** The repository: visionos/MindPalace/Resources/ocean.json, public/clips and public/works are read from it. */
+  /** The repository: library/ocean.json, library/clips and library/works are read from it. */
   repo: string;
   /** The saved trees as replayed. Defaults to the copy beside this file. */
   saved?: string;
@@ -131,11 +131,10 @@ const USER: Origin = { by: 'user' };
 
 export function readLibrary(files: LibraryFiles): Library {
   const read = <T>(schema: z.ZodType<T>, path: string): T => schema.parse(JSON.parse(readFileSync(path, 'utf8')));
-  const pub = join(files.repo, 'public');
-  const resources = join(files.repo, 'visionos/MindPalace/Resources');
-  const clips = read(Clips, join(pub, 'clips/clips.json'));
-  const works = read(Works, join(pub, 'works/works.json'));
-  const ocean = read(Ocean, join(resources, 'ocean.json'));
+  const library = join(files.repo, 'library');
+  const clips = read(Clips, join(library, 'clips/clips.json'));
+  const works = read(Works, join(library, 'works/works.json'));
+  const ocean = read(Ocean, join(library, 'ocean.json'));
   const saved = read(Replayed, files.saved ?? join(import.meta.dirname, 'library-saved.json'));
 
   // The headset gathers a tag from both files when both name it, as its catalog does.
@@ -167,7 +166,7 @@ export function readLibrary(files: LibraryFiles): Library {
         data: { when: String(c.year), from: 'Your film library' },
         url: `https://www.youtube.com/watch?v=${c.videoid}`,
       },
-      media: { kind: 'film', atlas: join(pub, clips.atlas.poster), tile: c.tile, video: join(pub, c.full.src) },
+      media: { kind: 'film', atlas: join(library, clips.atlas.poster), tile: c.tile, video: join(library, c.full.src) },
     });
   }
   for (const w of works.works) {
@@ -183,7 +182,7 @@ export function readLibrary(files: LibraryFiles): Library {
         data: { by: w.maker, date: w.date, from: w.museum, when: String(w.year) },
         url: w.url,
       },
-      media: { kind: 'work', heic: join(pub, 'works', w.file) },
+      media: { kind: 'work', heic: join(library, 'works', w.file) },
     });
   }
   const briefOf = new Map(ocean.briefs.map((b) => [b.root, b]));
@@ -201,7 +200,7 @@ export function readLibrary(files: LibraryFiles): Library {
         data: { kicker: n.kicker, ...(n.chart ? { chart: { labels: n.chart.labels, values: n.chart.values } } : {}), ...(n.link ? { site: n.link.site } : {}) },
         ...(n.link ? { url: n.link.url } : {}),
       },
-      media: still !== undefined ? { kind: 'of-film', film: still } : n.image ? { kind: 'file', path: join(resources, 'Ocean', n.image) } : { kind: 'none' },
+      media: still !== undefined ? { kind: 'of-film', film: still } : n.image ? { kind: 'file', path: join(library, 'notes', n.image) } : { kind: 'none' },
     });
   }
   for (const t of tags.values()) {

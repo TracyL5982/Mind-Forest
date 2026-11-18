@@ -21,10 +21,10 @@ JUDGE_ID=com.kaifengwu.mindpalace.ocean.judge
 # notice. Cloned, so the copy takes no room on this Mac.
 rm -rf "$STAGE"
 mkdir -p "$STAGE/media"
-cp -c "$REPO_ROOT/visionos/MindPalace/Resources/ocean.json" "$STAGE/media/"
-for f in "$REPO_ROOT"/visionos/MindPalace/Resources/Ocean/*; do [ -f "$f" ] && cp -c "$f" "$STAGE/media/"; done
-cp -cR "$REPO_ROOT/public/clips" "$STAGE/media/clips"
-cp -cR "$REPO_ROOT/public/works" "$STAGE/media/works"
+cp -c "$REPO_ROOT/library/ocean.json" "$STAGE/media/"
+for f in "$REPO_ROOT"/library/notes/*; do [ -f "$f" ] && cp -c "$f" "$STAGE/media/"; done
+cp -cR "$REPO_ROOT/library/clips" "$STAGE/media/clips"
+cp -cR "$REPO_ROOT/library/works" "$STAGE/media/works"
 cp -cR "$REPO_ROOT/media-src/quest/works-small" "$STAGE/media/works-small"
 for own in sounds hands fonts voice; do
   [ -n "$(ls -A "$REPO_ROOT/media-src/quest/$own" 2>/dev/null)" ] || { echo "media-src/quest/$own is missing or empty"; exit 1; }

@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Chooses the works from what gather.py found: scripts/works/selection.json.
+"""Chooses the works from what gather.py found: library/tools/works/selection.json.
 
-    python3 scripts/works/pick.py
+    python3 library/tools/works/pick.py
 
 Themes take turns, each taking its next best candidate from whichever museum
 has had the least so far, so the choice stays balanced across both. A
 candidate must really be about the theme (the words searched for are in its
 title, subjects, kind or description), no maker fills a theme, and a series
-of near-identical sheets gives one. scripts/works/exclude.txt lists ids to
+of near-identical sheets gives one. library/tools/works/exclude.txt lists ids to
 leave out (one per line, anything after # is a note); works whose picture
 could not be used are left out too (media-src/works/fetched.json). Among
-equals, a work whose picture is already in public/works/full is preferred.
+equals, a work whose picture is already in library/works/full is preferred.
 """
 import json, os, re, sys
 
@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from themes import THEMES, WANT  # noqa: E402
 import norm  # noqa: E402
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 SRC = os.path.join(ROOT, "media-src", "works")
 HERE = os.path.dirname(os.path.abspath(__file__))
 SHARE = {"met": 0.25, "vam": 0.22, "aic": 0.20, "moma": 0.18, "cma": 0.15}
@@ -86,7 +86,7 @@ def main():
     if os.path.exists(path):
         fetched = json.load(open(path))
         out |= {i for i, v in fetched.items() if not v.get("ok")}
-    full = os.path.join(ROOT, "public", "works", "full")
+    full = os.path.join(ROOT, "library", "works", "full")
     have = {n[:-5] for n in os.listdir(full)} if os.path.isdir(full) else set()
 
     # Each theme's candidates per museum: only real matches, its searches taking turns.

@@ -4,7 +4,7 @@
 that have a picture: media-src/works/moma-slim.json. The full file is deleted
 as soon as it has been read.
 
-    python3 scripts/works/moma.py
+    python3 library/tools/works/moma.py
 """
 import json, os, subprocess, sys, urllib.request
 

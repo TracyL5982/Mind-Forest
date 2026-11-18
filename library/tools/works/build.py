@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Builds what the app bundles from the chosen works and their pictures:
 
-    public/works/works.json   every work, its tile in the atlas, and the tags
-    public/works/atlas.jpg    every work small, in one picture (for the ocean)
-    public/works/full/        the pictures themselves (written by fetch.py)
+    library/works/works.json  every work, its tile in the atlas, and the tags
+    library/works/atlas.jpg   every work small, in one picture (for the ocean)
+    library/works/full/       the pictures themselves (written by fetch.py)
 
-    python3 scripts/works/build.py
+    python3 library/tools/works/build.py
 
 Tags come from four places: the themes the works were gathered around
 (themes.py), who made them, what kind of thing they are, and where they are
@@ -20,9 +20,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import norm  # noqa: E402
 from themes import THEMES  # noqa: E402
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 SRC = os.path.join(ROOT, "media-src", "works")
-OUT = os.path.join(ROOT, "public", "works")
+OUT = os.path.join(ROOT, "library", "works")
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOTAL = 750
 TILE = 96               # px tall in the atlas
@@ -102,7 +102,7 @@ def main():
         ))
 
     # --- tags
-    ocean = json.load(open(os.path.join(ROOT, "visionos", "MindPalace", "Resources", "ocean.json")))
+    ocean = json.load(open(os.path.join(ROOT, "library", "ocean.json")))
     film_tags = {t["id"]: t for t in ocean["tags"]}
     tags, taken = [], set()
 

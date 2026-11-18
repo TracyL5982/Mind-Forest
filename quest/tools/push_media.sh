@@ -1,6 +1,6 @@
 #!/bin/bash
-# Copies the media the app shows (what the visionOS bundle carries as
-# resources) to the headset, once: about 700 MB. A later run sends only a
+# Copies the media the app shows (the library, and the app's own media) to
+# the headset, once: about 700 MB. A later run sends only a
 # folder whose files changed. The app must be installed first; uninstalling
 # it removes the media.
 #   tools/push_media.sh
@@ -48,13 +48,13 @@ if [ ! -f "$SOUNDS/manifest.json" ] || [ "$(cat "$STAMP" 2>/dev/null)" != "$synt
   fi
 fi
 
-adb push "$REPO_ROOT/visionos/MindPalace/Resources/ocean.json" $DEVICE_FILES/media/ocean.json | tail -1
-# Notes' own pictures: the visionOS bundle holds them at its top, beside ocean.json.
-for f in "$REPO_ROOT"/visionos/MindPalace/Resources/Ocean/*; do
+adb push "$REPO_ROOT/library/ocean.json" $DEVICE_FILES/media/ocean.json | tail -1
+# Notes' own pictures, which the app finds by name beside ocean.json.
+for f in "$REPO_ROOT"/library/notes/*; do
   [ -f "$f" ] && adb push "$f" "$DEVICE_FILES/media/$(basename "$f")" | tail -1
 done
-sync_dir "$REPO_ROOT/public/clips" clips
-sync_dir "$REPO_ROOT/public/works" works
+sync_dir "$REPO_ROOT/library/clips" clips
+sync_dir "$REPO_ROOT/library/works" works
 sync_dir "$SMALL" works-small
 [ -f "$SOUNDS/manifest.json" ] && sync_dir "$SOUNDS" sounds
 # The welcome walk's lines in Momo's own voice, recorded (WS77/WS78), with their words in voice/manifest.json.

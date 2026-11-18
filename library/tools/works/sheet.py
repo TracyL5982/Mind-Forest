@@ -3,7 +3,7 @@
 media-src/works/sheets/<theme>.jpg. Each picture carries its id, to copy
 into exclude.txt.
 
-    python3 scripts/works/sheet.py [theme-id ...]
+    python3 library/tools/works/sheet.py [theme-id ...]
 """
 import json, os, sys
 

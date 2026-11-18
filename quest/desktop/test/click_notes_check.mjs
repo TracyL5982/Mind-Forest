@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { checker, flag, standIn, until } from './standin.mjs';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '../../..');
-const workIndex = new Map(JSON.parse(readFileSync(join(repo, 'public/works/works.json'), 'utf8')).works.map((w) => [w.id, w.index]));
+const workIndex = new Map(JSON.parse(readFileSync(join(repo, 'library/works/works.json'), 'utf8')).works.map((w) => [w.id, w.index]));
 
 // The ladder's notes in each of the five chords, as oceanmodel_sound.cpp holds them: layer k plays chord k % 5.
 const CHORDS = [[0, 1, 3, 6, 7, 10], [1, 2, 4, 7, 8, 11], [2, 5, 8, 9], [1, 3, 4, 7, 10, 11], [2, 4, 5, 8, 11]];

@@ -867,7 +867,7 @@ test('the showcase trees of the demo folder all hold together, and each is a tre
 });
 
 test("no showcase card is a work the headset's library already holds, since a pick gives way to what the user has", () => {
-  const { works } = JSON.parse(readFileSync(join(import.meta.dirname, '../../public/works/works.json'), 'utf8')) as { works: { url?: string }[] };
+  const { works } = JSON.parse(readFileSync(join(import.meta.dirname, '../../library/works/works.json'), 'utf8')) as { works: { url?: string }[] };
   const library = new Set(works.flatMap((work) => work.url ?? []));
   const { trees } = loadShowcase(join(demoDir, 'showcase'));
   const again = trees.flatMap(({ tree }) => tree.cards.filter((card) => card.href && library.has(card.href)).map((card) => `${tree.id}/${card.id}`));

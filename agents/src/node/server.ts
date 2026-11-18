@@ -71,7 +71,7 @@ export interface ServerOptions {
   settings?: Partial<Settings>;
   /** Maps switched on. Without it no place is looked up and clients are told to load no tiles. */
   maps?: Maps;
-  /** The only folder a linked file may be served from. Defaults to the repository's `public/clips/full`. */
+  /** The only folder a linked file may be served from. Defaults to the repository's `library/clips/full`. */
   films?: string;
   /** Mind Palace as a Telegram contact, reached with this bot's token. */
   telegram?: Omit<TelegramOptions, 'desk' | 'file' | 'log'>;

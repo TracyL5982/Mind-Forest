@@ -2,7 +2,7 @@
 """Asks five museums for works around each theme in themes.py and writes what
 they answer, in one shape, to media-src/works/candidates.json.
 
-    python3 scripts/works/gather.py [theme-id ...]
+    python3 library/tools/works/gather.py [theme-id ...]
 
 The Met, the V&A, the Art Institute of Chicago and Cleveland are searched
 through their open APIs (no key). MoMA publishes no search, only a dataset of
@@ -265,7 +265,7 @@ def moma_records():
     global _moma
     if _moma is None:
         if not os.path.exists(MOMA_SLIM):
-            sys.exit("media-src/works/moma-slim.json is missing: run scripts/works/moma.py first")
+            sys.exit("media-src/works/moma-slim.json is missing: run library/tools/works/moma.py first")
         with open(MOMA_SLIM) as f:
             _moma = json.load(f)
     return _moma

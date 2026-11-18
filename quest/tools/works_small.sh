@@ -7,7 +7,7 @@ set -e
 source "$(dirname "$0")/env.sh"
 SMALL="$REPO_ROOT/media-src/quest/works-small"
 mkdir -p "$SMALL"
-for f in "$REPO_ROOT"/public/works/full/*.heic; do
+for f in "$REPO_ROOT"/library/works/full/*.heic; do
   out="$SMALL/$(basename "${f%.heic}").jpg"
   [ -f "$out" ] && [ "$out" -nt "$f" ] && continue
   echo "$f"

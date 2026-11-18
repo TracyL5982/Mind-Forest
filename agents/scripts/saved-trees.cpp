@@ -13,7 +13,7 @@ static std::string repo;
 
 namespace platform {
 std::string resourcePath(const std::string& name) {
-    return name == "ocean.json" ? repo + "/visionos/MindPalace/Resources/ocean.json" : repo + "/public/" + name;
+    return repo + "/library/" + name;
 }
 std::optional<std::string> readText(const std::string& name) {
     std::ifstream file(resourcePath(name));
