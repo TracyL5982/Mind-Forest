@@ -11,9 +11,14 @@ It is a native OpenXR app for the headset ([quest/](quest/README.md)) and a Type
   <img src="docs/in-use-4.jpg" width="24%" alt="Mind Forest outdoors: a tree open in layers, the forest on the grass">
 </p>
 
-![A tree in the app: each layer of cards in its own colour, over the library of films and artworks](agents/demo/docs/tree-in-the-app.jpg)
-
-![Trees put away on the desk, each with its name and its rings](agents/demo/docs/showcase-forest.jpg)
+<p>
+  <img src="docs/lakeside-1.jpg" width="49%" alt="Mind Forest by a lake: a tree open in layers of cards, each layer in its own colour">
+  <img src="docs/lakeside-2.jpg" width="49%" alt="A closed hand pulling a layer of the tree forward">
+</p>
+<p>
+  <img src="docs/lakeside-3.jpg" width="49%" alt="Palms together: the trees closed and standing on the grass, each with its name">
+  <img src="docs/lakeside-4.jpg" width="49%" alt="A card opened in the tree, with questions to ask under it">
+</p>
 
 ## The first five minutes in the headset
 
@@ -40,7 +45,7 @@ This is the judging build, one app named "Mind Forest" that joins the hosted ser
 
 Hold your palms together for a second to close the tree you are in.
 
-**The welcome tree afterwards.** The welcome tree stays in your forest. Once you put it away it stands on the desk with your own trees and the five example trees, also after the app is closed and opened again, and you can open it any time to see a lesson again. The **Gestures** button lists every gesture, and **Start the guide over** on that sheet begins the lessons from the first.
+**The welcome tree afterwards.** The welcome tree stays in your forest. Once you close it (palms together, or **Close the Tree**) it stands on the desk with your own trees and the five example trees, also after the app is closed and opened again, and you can open it any time to see a lesson again. The **Gestures** button lists every gesture, and **Take the tour** on that sheet begins the lessons from the first. A lesson that is done moves on to the next by itself a few seconds later.
 
 ## The hackathon's experience guidelines
 
