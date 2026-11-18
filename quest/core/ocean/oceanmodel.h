@@ -658,6 +658,7 @@ private:
         // The welcome tree's walk (oceanmodel_guide.cpp).
         int tour = -1;                      // the lesson the walk has got to; -1 when there is no walk
         int tourBeat = 0;                   // how far through that lesson: pulling is two (pull, then push back)
+        double tourPulledAt = -1;           // WS103: when the pull lesson's pull came, for its safety net
         bool tourTook = false;              // a card was pinched this frame: the walk is wherever that card is
         int tourAdvanceFor = -1;            // the lesson that is finished and about to be left, and when
         double tourAdvanceAt = 0;
@@ -722,6 +723,7 @@ private:
         double tourWalkAt = 0;              // `-guideStep`: when the next card is taken
         bool scripted = false;              // the run is driven by flags: the welcome tree does not come by itself
         bool demoStarted = false;
+        bool standingWalk = false;          // WS101: the walk is standing its own tree (`startTour`), not one opened again
         std::optional<std::string> demo;    // `-guideDemo`
         double demoT = -1;                  // `-guideT`
     };
@@ -748,6 +750,7 @@ private:
     /// WS101: the first card of the layer the walk stands on, which is the lesson's: a card opened where it stands (a short
     /// pinch, as in the service's trees) leaves it as it was. The welcome card not yet opened, at the start, is lesson 1's.
     std::optional<int> tourHead() const;
+    int tourOpenLesson(int lesson) const;
     /// WS101: a pinch on a closed card of the welcome tree's walk opens it where it stands, as a pinch does in the service's
     /// trees (a layer grows from the next lesson's card only with a long pinch). True when the walk took it.
     bool tourOpens(int id);

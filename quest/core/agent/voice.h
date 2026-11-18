@@ -61,6 +61,9 @@ public:
     Voice(Client& client, std::function<Scene()> scene, std::optional<std::string> clip, bool muted);
     ~Voice();
     Voice(const Voice&) = delete;
+    /// WS103 (the user: "momo should be mute when that tree is closed"): whether no tree stands. While none does, what a
+    /// piece of work brings is not said or shown; an answer to what the user said always is.
+    std::function<bool()> away;
     Voice& operator=(const Voice&) = delete;
 
     /// Every connect: the name to listen for, whether the service reads replies aloud, whether it has a live voice, and
@@ -267,6 +270,7 @@ private:
 
     Client& client;
     std::function<Scene()> scene;
+    std::string hushedResults;      // WS103: what a piece of work brought while no tree stood, not said: its id
     std::optional<std::string> clip;
     bool muted;
     std::shared_ptr<Ears> ears;

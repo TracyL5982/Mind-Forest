@@ -1035,6 +1035,8 @@ void OceanModel::restyle(bool stirring) {
         }
         // An earlier step carries its number in its name; nothing hidden carries one.
         if (look.alpha <= 0 || look.label > 0.5f) key = "";
+        // (WS101: nor the walk's card 1 before its pinch opens it: it looks as the next lesson's card does, which has none.)
+        if (onWelcomeTree() && !tree.focused && n.id == tree.root) key = "";
         if (key != c.badgeKey) {
             c.badgeKey = key;
             if (c.badge) fadeOut(c.badge, 0.18f);

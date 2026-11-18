@@ -72,8 +72,12 @@ const TourStep tourSteps[] = {
     // WS101: the first two lessons are a tree's two moves, done: a pinch opens a card where it stands (the walk begins with
     // this one closed), and a long pinch, held till the ring fills, grows a new layer from one (card 2).
     {"welcome", "hold", "Welcome to Mind Forest",
-     "Around you is everything Momo remembers; a tree is the part in play. A pinch opened this card. Now pinch and hold card 2 till the ring fills.", "ask", "", "", 2, 0.92f,
-     "Pinch and hold card 2 until the ring fills"},
+     // (The user's own words, WS101: two paragraphs, the blank line between kept by the lesson card, core/cards/lesson.cpp.)
+     "Around you is an ocean of inspirations collected with Momo, your AI thinking partner, where every tree is a project in play. "
+     "Pinch a card to open it. Pinch and hold to sprout a new layer around it.\\n\\n"
+     "Try it now: pinch and hold Card 2 until the ring fills to watch a new layer grow.", "ask", "", "", 2, 0.92f,
+     // (The line over the tree stays short: longer, it ran in behind the picture beside card 1. The card's text says what it does.)
+     "Point at card 2, pinch and hold until the ring fills"},
     {"welcome-pan", "carry", "Grab to pan",
      "This is a new layer of the tree: it grew from this card as you held it. Close your hand and move it: the tree comes too.", "carry", "", "", 2, 0.72f, "Close your hand and move it sideways"},
     {"welcome-pull", "layers", "Grab to pull or push",
@@ -93,7 +97,7 @@ const TourStep tourSteps[] = {
     {"welcome-tree", "tree", "Choose a layer on the small tree",
      "Low on your left stands this tree in little. Slide a finger along it and pinch to jump to a layer.", "jump", "tree", "Slide a finger along it, pinch to jump", 1, 0.86f, "Reach for the small tree, low on your left"},
     {"welcome-close", "clap", "Palms together to close",
-     "Hold your palms together for a second: the tree is pressed flat and put away. Its buttons do the same.", "press", "strip", "Or pinch Put away", 0, 0.6f, "Hold your palms together for a second"},
+     "Hold your palms together for a second: the tree is pressed flat and closed. Its buttons do the same.", "press", "strip", "Or pinch Close the Tree", 0, 0.6f, "Hold your palms together for a second"},
 };
 const int tourCount = int(sizeof(tourSteps) / sizeof(tourSteps[0]));
 const int pullStep = 2, moveStep = 3, momoStep = 4, markStep = 5, treeStep = 6, closeStep = 7;
@@ -521,7 +525,7 @@ void OceanModel::addWelcomeNotes() {
             links += fmt("%s{\"to\": \"%s\", \"why\": \"%s\"}", links.empty() ? "" : ", ", to.c_str(), why);
         };
         // (A lesson of talking to Momo has no next card beside it: the way on is from the layer Momo answers with.)
-        if (k + 1 < tourCount && !step.result[0]) link(std::string("note:") + tourSteps[k + 1].note, k == 0 ? "Start here" : "Next");
+        if (k + 1 < tourCount && !step.result[0]) link(std::string("note:") + tourSteps[k + 1].note, k == 0 ? "Pinch and hold" : "Next");
         for (int n = 0; n < step.pictures && works > 0; n++) {
             used += 1;
             link(fmt("work:%d", (works * (2 * used - 1)) / 23 % works), std::string(step.gesture) == "drag" ? "Pick me up" : "A picture");
@@ -575,11 +579,18 @@ void OceanModel::addWelcomeNotes() {
         {"momo-can-more", "More", "More like this", "Show me more like this.", "About the open card. Narrow it as you like: more, but older."},
         {"momo-can-hand", "Pass on", "Hand it off", "Hand this off to my coding agent.", "The tree becomes one file another agent can work from."},
     };
+    // Each is drawn as a served note is, closed and open (WS103): its headline, then the line it sets apart and its
+    // summary, from Momo (as a served card names its source, so it never reads as the user's own).
     auto make = [&](const std::string& text, const char* id) {
         std::optional<Json> json = Json::parse(text);
         std::optional<OceanNote> note = json ? OceanNote::from(*json) : std::nullopt;
-        if (note) catalog->notes[id] = *note;
-        else logLine(fmt("[guide] the walk's card %s could not be made", id));
+        if (!note) return logLine(fmt("[guide] the walk's card %s could not be made", id));
+        catalog->notes[id] = *note;
+        Json view = Json::object(), item = Json::object();
+        view.set("component", "note").set("props", Json::object());
+        std::string said = note->highlight.empty() ? note->summary : note->highlight + " " + note->summary;
+        item.set("title", note->headline).set("summary", said).set("origin", Json::object().set("by", "agent")).set("data", Json::object().set("from", "Momo"));
+        cards::ocean::hold(cards::OceanCard{id, view, item, std::nullopt});
     };
     std::string canLinks = fmt("{\"to\": \"note:%s\", \"why\": \"Next\"}", tourSteps[momoStep + 1].note);
     for (const Can& can : cans) {
@@ -619,8 +630,14 @@ void OceanModel::tourMarkNote(const std::string& words) {
                            said.empty() ? "Sent without a word." : ("You said: “" + said + "”").c_str(), markStep + 2, teach.tourMarkLinks.c_str());
     std::optional<Json> json = Json::parse(text);
     std::optional<OceanNote> note = json ? OceanNote::from(*json) : std::nullopt;
-    if (note) catalog->notes["momo-mark"] = *note;
-    else logLine("[guide] the walk's card momo-mark could not be made");
+    if (!note) return logLine("[guide] the walk's card momo-mark could not be made");
+    catalog->notes["momo-mark"] = *note;
+    // Drawn as a served note is, each time it is made again (WS103): as Momo's, like the cards round momo-can.
+    Json view = Json::object(), item = Json::object();
+    view.set("component", "note").set("props", Json::object());
+    std::string shown = note->highlight.empty() ? note->summary : note->highlight + " " + note->summary;
+    item.set("title", note->headline).set("summary", shown).set("origin", Json::object().set("by", "agent")).set("data", Json::object().set("from", "Momo"));
+    cards::ocean::hold(cards::OceanCard{"momo-mark", view, item, std::nullopt});
 }
 
 void OceanModel::ensureWelcomeTree(const char* why) {
@@ -656,7 +673,9 @@ void OceanModel::startTour() {
         if (!catalog) return;
         standingSpot = std::nullopt;
         standingPlot = std::nullopt;
+        teach.standingWalk = true;
         stand(std::make_shared<Tree>(Ref::note(tourSteps[0].note), tourTitle, Maker::gardener, catalog));
+        teach.standingWalk = false;
         // WS101: the ring a long pinch fills, drawn in the background now, so it is there the moment card 2 is held.
         if (art) {
             for (int step = 0; step <= Art::holdSteps; step++) art->holdRing(step);
@@ -695,6 +714,18 @@ std::optional<int> OceanModel::tourHead() const {
     if (!tree) return std::nullopt;
     if (!tree->focused && tree->stand != tree->root) return std::nullopt;
     return tree->stand;
+}
+
+/// WS103: the lesson whose card is open: the layer's own (`lesson`), or a lesson's card opened where it stands, whose stage
+/// plays its own gesture so that no lesson card is ever an empty card while open.
+int OceanModel::tourOpenLesson(int lesson) const {
+    if (!tree || !tree->focused || !tourHead() || tree->current == *tourHead()) return lesson;
+    const TreeNode* node = find(*tree, tree->current);
+    if (!node || node->ref.kind != Ref::Kind::note) return lesson;
+    for (int k = 0; k < tourCount; k++) {
+        if (node->ref.id == tourSteps[k].note && k != markStep) return k;
+    }
+    return lesson;
 }
 
 /// Which lesson's layer the walk stands on; -1 when it is none of them.
@@ -762,6 +793,36 @@ void OceanModel::tourShow(int shown) {
     teach.tourShown = shown;
     teach.tourBegan = time;
     if (shown < 0) return;
+    // WS101: 300, card 1 not open yet: a hand pinching a card open, on a dark card of its own under card 1, with its words.
+    // (It goes once the card is open: the lesson's own hand then plays on the open card.)
+    if (shown == 300) {
+        const guide::Gesture* gesture = tourGesture("pinch");
+        CardRef first = tourCard(0);
+        if (!gesture || !first) {
+            teach.tourShown = -1;
+            return;
+        }
+        // WS103: on card 1 itself, the drawing's own card laid exactly over it (the user: "match perfectly with step 1
+        // card"): the pinch drawing's card is 0.15 by 0.1 m with its middle at `pinchCard`, scaled to card 1's width and
+        // set on its middle, the hand in front of it. No dark card behind (the user: "remove the rectangle background").
+        const Vec3 pinchCard{-0.055f, 0.075f, -0.16f};
+        const float size = first->smallBody.x / 0.15f;
+        EntityRef holder = Entity::make();
+        first->smallHolder->addChild(holder);
+        teach.painter->setLine(lessonLine);
+        guideHand(holder, Vec3{0, 0, 0.004f} - pinchCard * size, size);
+        // Its words on their own ink, under card 1.
+        if (std::optional<Piece> piece = art->line("A pinch opens a card", Art::Size::label, Font::Weight::semibold, Color::white(), Art::ink, Art::buttonPad)) {
+            EntityRef words = art->quad(*piece);
+            words->position = {0, -first->smallBody.y / 2 - 0.012f - piece->size.y / 2, 0.006f};
+            holder->addChild(words);
+        }
+        fadeIn(holder, 0, 0.4f);
+        teach.holder = holder;
+        teach.mode = 4;
+        logLine("[guide] lesson 1, card 1 closed: a hand pinches it open, on it");
+        return;
+    }
     const TourStep& step = tourSteps[shown >= 200 ? pullStep : shown % 100];
     if (shown < 100 || shown >= 200) {
         // On its own card: in the middle of the stage at the top of it, standing off it toward you, at its `stage` size.
@@ -775,7 +836,9 @@ void OceanModel::tourShow(int shown) {
         const guide::Gesture* gesture = tourGesture(step.gesture);
         doneAt = gesture ? drawnMiddle(*gesture) : Vec3::zero();
         teach.painter->entity->position = Vec3{picture.center.x, picture.center.y, 0.2f * size + 0.014f} - doneAt * size;
-        teach.painter->entity->orientation = Quat::identity();
+        // WS103: the pull and the push are a hand moving toward you and away: turned a little, as the guide's own lesson turns it
+        // (`showLesson`), so that its depth shows on the card. Face on, the push read as nothing moving.
+        teach.painter->entity->orientation = std::string(step.gesture) == "layers" ? Quat::angleAxis(30 * floatPi / 180, {0, 1, 0}) : Quat::identity();
         teach.painter->entity->scale = Vec3::repeating(size);
         teach.painter->setLine(0.0017f);
         c->openHolder->addChild(teach.painter->entity);
@@ -950,6 +1013,15 @@ bool OceanModel::tourPinchedOpen() {
     // (A card opened where it stands is not gone into on the walk: the line says what to do with it.)
     bool inPlace = tree->focused && tourHead() && tree->current != *tourHead();
     if (lesson == markStep && !tourOnResult() && !inPlace) return false;
+    // WS103: a lesson done, a pinch on its open card goes on, as before WS101: so step 7 opened from Momo's answer to the
+    // sketch. (Not lesson 1's own card, whose way on is the hold on card 2 it teaches.)
+    if (!inPlace && lesson > 0 && teach.tourAdvanceFor == lesson) {
+        if (std::optional<int> next = tourNode(lesson + 1)) {
+            logLine(fmt("[guide] lesson %d done, its open card pinched: on to step %d", lesson + 1, lesson + 2));
+            take(*next);
+            return true;
+        }
+    }
     logLine(fmt("[guide] the open card was pinched on lesson %d: nothing to go into", lesson + 1));
     return true;
 }
@@ -1051,10 +1123,24 @@ void OceanModel::updateTour(double now, Vec3 eye) {
         }
     }
 
+    // WS103: the pull lesson's safety net: pulled back and no push for 15 s, the walk takes them back to step 3's layer itself,
+    // and the lesson counts as done.
+    // (The user's, WS103: "let's go with your 15 seconds": on to step 4 from wherever they stand, step 3 done.)
+    if (at == pullStep && teach.tourBeat == 1 && teach.tourPulledAt >= 0 && now - teach.tourPulledAt >= 15) {
+        teach.tourBeat = 2;
+        teach.tourDone[pullStep] = true;
+        if (std::optional<int> next = tourNode(pullStep + 1)) {
+            logLine("[guide] pulled back and no push for 15 s: on to step 4 by itself");
+            // (Card 4 lies folded onto card 3 off step 3's layer: through that layer, and on into card 4's.)
+            if (std::optional<int> three = tourNode(pullStep)) take(*three);
+            take(*next);
+            return;
+        }
+    }
     // Is this lesson finished? Pulling is only half of its lesson: the other half is being back on its card.
     bool finished = teach.tourDone[at];
     if (at == 0) finished = false;                                              // (its doing is the taking of the next card)
-    if (at == pullStep) finished = teach.tourBeat >= 1 && here && !(teach.demo && Flags::has("guideBeat"));
+    if (at == pullStep) finished = (teach.tourBeat >= 2 || (teach.tourBeat >= 1 && here)) && !(teach.demo && Flags::has("guideBeat"));
     // (A lesson of talking to Momo is done on the layer Momo answered with.)
     bool result = tourOnResult();
     if (tourSteps[at].result[0]) finished = here && result;
@@ -1075,8 +1161,9 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     if (zoomed || result) want = -1;
     else if (lesson == markStep) want = teach.tourDone[markStep] ? -1 : 100 + markStep;
     else if (lesson >= 0 && lesson != markStep && at == pullStep && teach.tourBeat >= 1 && !here) want = 200 + lesson;
-    else if (lesson >= 0) want = lesson;
-    if (want >= 0 && (want < 100 || want >= 200)) {
+    else if (lesson == 0 && !tree->focused) want = 300;      // (WS101: card 1 not open yet)
+    else if (lesson >= 0) want = tourOpenLesson(lesson);
+    if (want >= 0 && (want < 100 || (want >= 200 && want < 300))) {
         CardRef c = tourCard(want % 100);
         // (Its card is still opening; WS101: or not open at all, the first one before its pinch, or one opened in place instead.)
         if (!c || !c->openBuilt || tree->focus() != c->id) want = -1;
@@ -1088,7 +1175,7 @@ void OceanModel::updateTour(double now, Vec3 eye) {
         if (ticking && teach.tourTick < 0) teach.tourTick = now;
         if (ticking) {
             teach.painter->draw(doneGesture, float(teach.demoT >= 0 ? teach.demoT : now - teach.tourTick), eye);
-        } else if (const guide::Gesture* g = tourGesture(tourSteps[teach.tourShown >= 200 ? pullStep : teach.tourShown % 100].gesture)) {
+        } else if (const guide::Gesture* g = teach.tourShown == 300 ? tourGesture("pinch") : tourGesture(tourSteps[teach.tourShown >= 200 ? pullStep : teach.tourShown % 100].gesture)) {
             teach.painter->draw(*g, float(teach.demoT >= 0 ? teach.demoT : std::fmod(now - teach.tourBegan, double(g->seconds))), eye);
         }
     }
@@ -1102,12 +1189,15 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     // a minute, the walk takes it itself (sooner where the card is not there to pinch: the small tree has
     // taken you to another layer).
     bool canPinchNext = open && nextCard && here;
-    static const double autoAfter = Flags::has("guideAutoAfter") ? Flags::number("guideAutoAfter") : 15;
-    // (Not out of Momo's two lessons: there the user may still be asking her things, and moves on by hand, card 6 or 7 being
-    // there to pinch. The user, WS80: "this auto-advance feature makes sense for some rounds, just probably not right for
-    // the two rounds that has momo in it".)
+    // WS103: 5 s after a lesson is done, the user's ("it should auto-advance 5 seconds after a step is done … for momo step,
+    // it should be 5 seconds after momo stops talking"), Momo's two lessons too: there counted from her last word (her
+    // answer, or her reply to an example asked), once her answer's layer stands. (WS80 had them wait for a pinch.)
+    static const double autoAfter = Flags::has("guideAutoAfter") ? Flags::number("guideAutoAfter") : 5;
     bool hers = at == momoStep || at == markStep;
-    if (passing && !hers && !zoomed && !busy && !holdDone && now - teach.tourAdvanceAt >= (canPinchNext ? autoAfter : 4.0)) {
+    double doneSince = hers ? std::max({teach.tourAdvanceAt, teach.answerEnds, teach.askedUntil}) : teach.tourAdvanceAt;
+    // (From whatever layer they stand on, an earlier lesson's too: the next card is taken where it is, WS103.)
+    // (A hand held closed, or a pinch held, defers it, but only 10 s more: a hand resting in a fist never holds the walk.)
+    if (passing && !zoomed && (!busy || now - doneSince >= autoAfter + 10) && !holdDone && now - doneSince >= autoAfter) {
         if (std::optional<int> next = tourNode(at + 1)) {
             take(*next);
             return;
@@ -1144,7 +1234,7 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     // What the line over the tree says, and what is pointed at.
     signs.clear();
     std::string words, pinWords, spotWords;
-    std::optional<Vec3> pinAt, spotAt, offAt, talkAt, closedAt;
+    std::optional<Vec3> pinAt, spotAt, offAt, talkAt, closedAt, firstAt;
     // WS101: a card opened where it stands by a short pinch, not the lesson's own (the layer is still the lesson's).
     bool inPlace = tree->focused && tourHead() && tree->current != *tourHead();
     float pinSize = 0;
@@ -1212,28 +1302,36 @@ void OceanModel::updateTour(double now, Vec3 eye) {
         }
     } else if (at == 0 && lesson == 0 && !tree->focused) {
         // WS101: the walk's first card, not open yet: the pinch that opens it where it stands is the first lesson.
-        words = "Point at card 1 and pinch it";
+        words = "Point at card 1 and pinch to open it";
+        // (Card 1 looks as card 2 does when it is the one to act on: its tag over it, "Pinch here", and no round of its own.)
         if (CardRef first = tourCard(0); first && first->alpha.target() > 0.5f) {
-            signs.rounds.push_back(roundOn(*first, {0, -0.016f}, first->half * 2 + Vec2{0.06f, 0.09f}));
-            closedAt = first->position + stage.u * (first->half.y + 0.11f);
+            // (Over every card of the layer, not only card 1: in the joined look the picture cards beside it stand taller, and
+            // the line's first words ran in behind one.)
+            float top = first->half.y + 0.09f;
+            for (const auto& [id, c] : cards) {
+                if (c && c->alpha.target() > 0.5f) top = std::max(top, dot(c->position - first->position, stage.u) + c->half.y);
+            }
+            closedAt = first->position + stage.u * (top + 0.07f);
+            firstAt = first->position + stage.u * (first->half.y + 0.085f);
         }
     } else if (!open && inPlace) {
         // WS101: a card opened where it stands by a short pinch. The next lesson's card is to be held (as a layer grows in the
         // service's trees); any other, the lesson's own card brings the lesson back.
         std::optional<int> next = tourNode(at + 1);
         if (next && tree->current == *next) words = "Now pinch and hold it until the ring fills";
-        else if (next && passing) words = fmt("Pinch and hold card %d to go on", at + 2);
-        else words = fmt("Pinch card %d to go back to the lesson", at + 1);
+        else if (next && passing) words = fmt("Point at card %d, pinch and hold until the ring fills", at + 2);
+        else words = fmt("Pinch card %d to open the lesson again", at + 1);
     } else if (!open) {
         // (Its card is on its way open: the line stays as it was.)
         words = teach.tourCaptionWords;
     } else if (passing) {
-        words = at + 1 >= tourCount ? "Done" : canPinchNext ? fmt("Done. Pinch and hold card %d to go on", at + 2) : fmt("Done. Step %d opens in a moment", at + 2);
+        words = at + 1 >= tourCount ? "Done" : canPinchNext ? fmt("Done. Point at card %d, pinch and hold until the ring fills", at + 2) : fmt("Done. Step %d opens in a moment", at + 2);
         toNext = true;
     } else if (at == pullStep && teach.tourBeat >= 1) {
-        words = here ? "" : "Now push it away to come back";
+        // (Pulled back, and waiting for the push: said on whatever layer they stand, WS103.)
+        words = "Now push your closed hand away to come back";
     } else if (!here) {
-        words = lesson < at ? fmt("Step %d is ahead: push your closed hand away", at + 1) : fmt("Back to the walk: pinch and hold card %d", at + 1);
+        words = lesson < at ? fmt("Step %d is ahead: push your closed hand away", at + 1) : fmt("Back to the walk: point at card %d, pinch and hold until the ring fills", at + 1);
     } else {
         words = tourSteps[at].say;
         // (Come back out of the picture before it was sent, or before a word was said about it.)
@@ -1307,13 +1405,13 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     if (!words.empty()) teach.tourCaptionWords = words;
     tourCaption(fmt("%d of %d", at + 1, tourCount), words, over && !zoomed ? std::optional<Vec3>(inRoom(*over) + stage.u * 0.035f) : closedAt);
 
-    // By the next card: what it is for. From the first card it is the lesson itself; once a lesson is done the
+    // By the next card: what it is for, above the round about it (WS101: clear of its line). From the first card it is the lesson itself; once a lesson is done the
     // walk goes there by itself; and to whoever has been on a lesson a while without doing it, that it can be skipped.
     static const double skipAfter = Flags::has("guideSkipAfter") ? Flags::number("guideSkipAfter") : 14;
     bool waited = here && !passing && at > 0 && now - teach.tourLessonAt > skipAfter;
     bool showNext = open && nextCard && !zoomed && here && (at == 0 || passing || waited);
-    tourPin(teach.tourNextPin, teach.tourNextSaid, at == 0 ? "Hold here" : passing ? "Next" : "Or skip ahead: hold this card",
-            showNext ? std::optional<Vec3>(nextCard->position + stage.u * (nextCard->half.y + 0.05f)) : std::nullopt);
+    tourPin(teach.tourNextPin, teach.tourNextSaid, firstAt ? "Pinch here" : at == 0 ? "Pinch and hold here" : passing ? "Next" : "Or skip ahead: pinch and hold this card",
+            firstAt ? firstAt : showNext ? std::optional<Vec3>(nextCard->position + stage.u * (nextCard->half.y + 0.085f)) : std::nullopt);
 
     // Words by the thing to use: inside the card being marked (set above), or where a button does what the gesture does.
     if (!zoomed && here && !passing && !(at == pullStep && teach.tourBeat >= 1)) {
@@ -1396,7 +1494,13 @@ void OceanModel::tourDid(const std::string& did, float amount) {
     if (!onWelcomeTree()) return;
     if (did == "ask") teach.tourTook = true;
     if (did == "carry") teach.tourCarried += amount;
-    if (did == "step" && teach.tour == pullStep) teach.tourBeat = 1;
+    // WS103: the pull-and-push lesson: pulled back (beat 1), then pushed forward at least once, wherever the push lands
+    // (beat 2, done). A long pull steps two layers back, and one push one forward: nobody is left on an earlier layer.
+    if (did == "step" && teach.tour == pullStep) {
+        if (amount > 0 && teach.tourBeat < 1) teach.tourPulledAt = time;
+        if (amount > 0) teach.tourBeat = std::max(teach.tourBeat, 1);
+        else if (teach.tourBeat >= 1) teach.tourBeat = 2;
+    }
     for (int k = 0; k < tourCount; k++) {
         if (teach.tourDone[k] || did != tourSteps[k].did) continue;
         if (did == "carry" && teach.tourCarried < 0.1f) continue;
@@ -1940,7 +2044,7 @@ void OceanModel::showHome() {
     const float letter = 0.21f, space = letter * 0.2f;
     std::vector<Piece> words;
     float whole = 0;
-    for (const char* word : {"Welcome", "to", "Mind", "Forest"}) {
+    for (const char* word : {"You’re", "all", "set"}) {  // (WS103, the user: "Welcome to Mind Forest" here read as the welcome come again)
         std::optional<Piece> piece = art->lettering(word, letter);
         if (!piece) return;
         // (Each piece carries room round its word for the script's swing: the words overlap by that much.)
@@ -2118,7 +2222,7 @@ void OceanModel::showSheet(int row) {
     }
     x += closeWidth + 0.01f;
     x += guideWords(holder, art->line("Take the tour", Art::Size::label, Font::Weight::medium, Color::white(), Art::ink, Art::buttonPad), x, foot, false, Act::tour) + 0.01f;
-    guideWords(holder, art->line("Start the guide over", Art::Size::label, Font::Weight::medium, Color::white(1, 0.8f), Art::ink, Art::buttonPad), x, foot, false, Act::startOver);
+    // (WS103, the user: "Start the guide over" stood here too and did the same to the eye: one of the two was to go.)
     const float size = 0.62f, middle = 0.2f;
     // Here a gesture is something to look at, not to copy in place: the one made toward and away from you
     // is turned a little, so that its depth shows.
@@ -2440,7 +2544,25 @@ void OceanModel::updateGuide(double now, float dt) {
         }
     }
 
-    if (teach.tour >= 0) updateTour(now, eye);
+    if (teach.tour >= 0) {
+        updateTour(now, eye);
+    } else if (onWelcomeTree() && !pressing && teach.mode == 0 && tree->focus()) {
+        // WS103: the welcome tree standing out of the walk (it was skipped, or ended with the tree up): the lesson card open
+        // plays its gesture on its stage as on the walk, so none is ever an empty card.
+        int want = -1;
+        const TreeNode* node = find(*tree, *tree->focus());
+        for (int k = 0; node && node->ref.kind == Ref::Kind::note && k < tourCount; k++) {
+            if (node->ref.id == tourSteps[k].note && k != markStep) want = k;
+        }
+        CardRef c = want >= 0 ? card(*tree->focus()) : nullptr;
+        if (!c || !c->openBuilt || zoom.target() > 0.5f) want = -1;
+        if (want != teach.tourShown) tourShow(want);
+        if (teach.tourShown >= 0) {
+            if (const guide::Gesture* g = tourGesture(tourSteps[teach.tourShown].gesture)) {
+                teach.painter->draw(*g, float(std::fmod(now - teach.tourBegan, double(g->seconds))), eye);
+            }
+        }
+    }
     updateHome(now);
 
     if (teach.mode == 3) {

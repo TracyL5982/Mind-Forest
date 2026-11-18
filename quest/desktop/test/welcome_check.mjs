@@ -12,6 +12,10 @@
 //   launch 5   that one comes back at its place, and no other is made
 //   launch 6   a first launch again, closed mid-walk with the welcome tree standing, never put away: it is written down
 //   launch 7   it comes back on the desk once, with its layers, and the walk does not come again
+//   launch 8   WS101: opened from the desk, the walk is on, from step 1: its card 1 closed with the hand that pinches it, the
+//              pinch opening it, the hold on card 2 going on to the next layer; still one welcome tree
+//   launch 9   opened again and put away early: the walk ends, the tree back on the desk
+//   launch 10  opened again after that: the walk is on again
 //
 //   quest/desktop/build.sh && node quest/desktop/test/welcome_check.mjs --data <data folder> [--shots <folder>]
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -131,6 +135,36 @@ try {
   const file7 = readWelcome();
   check(file7 && file7.trees.length === 1 && file6 && file7.trees[0].tree.nodes.length === file6.trees[0].tree.nodes.length,
     `with the cards it had (${file7 ? file7.trees[0].tree.nodes.length : 0} of ${file6 ? file6.trees[0].tree.nodes.length : 0})`);
+
+  // Launches 8 to 10 (WS101): the welcome tree opened again from the desk is the walk, as the first time.
+  const walkOn = (log, name) => {
+    check(find(log, /^\[guide\] the welcome tree is opened again: the walk, from step 1$/) && find(log, /^\[guide\] the welcome tree stands$/),
+      `${name}: opened from the desk, the walk is on, from step 1`);
+    check(find(log, /^\[guide\] lesson 1, card 1 closed: a hand pinches it open, on it$/), `${name}: card 1 closed, the hand that pinches it open plays on it`);
+  };
+  const eighth = stand.launch(shots, 'launch8-reopened', 24, ['-unfoldWelcomeAt', '6', '-walkOpenAt', '12', '-walkHoldNextAt', '16']);
+  await eighth.done;
+  keepLog('launch8-reopened', eighth.log);
+  walkOn(eighth.log, 'launch 8');
+  check(find(eighth.log, /^\[guide\] a pinch opened Welcome to Mind Forest where it stands$/), 'the pinch opens card 1 where it stands');
+  check(find(eighth.log, /^\[ocean\] layers: Step 1 of 8 > \[Step 2 of 8\]/), 'and the hold on card 2 grows its layer: step 2');
+  const file8 = readWelcome();
+  check(file8 && file8.trees.length === 1 && isWelcome(file8.trees[0]), `still one welcome tree kept (${file8 ? file8.trees.length : 0})`);
+
+  const ninth = stand.launch(shots, 'launch9-putaway', 20, ['-unfoldWelcomeAt', '6', '-pressAt', '13']);
+  await ninth.done;
+  keepLog('launch9-putaway', ninth.log);
+  walkOn(ninth.log, 'launch 9');
+  const ended = find(ninth.log, /^\[guide\] the walk ends: /);
+  check(ended && placed(ninth.log.filter((l) => l.at >= ended.at)).filter((p) => p.title === welcomeTitle).length === 1,
+    'put away, the walk ends and the welcome tree is back on the desk, once');
+
+  const tenth = stand.launch(shots, 'launch10-again', 16, ['-unfoldWelcomeAt', '6']);
+  await tenth.done;
+  keepLog('launch10-again', tenth.log);
+  walkOn(tenth.log, 'launch 10');
+  const file10 = readWelcome();
+  check(file10 && file10.trees.length === 1, `one welcome tree kept (${file10 ? file10.trees.length : 0})`);
 } finally {
   await stand.close();
 }

@@ -92,12 +92,12 @@ std::optional<Piece> face(Art& art, const std::string& noteID, const std::string
 void hold(const std::shared_ptr<const Catalog>& catalog) { held() = catalog; }
 
 std::optional<std::string> cardOf(const Ref& ref) {
-    // GUIDE: what Momo answers with on the welcome walk (core/ocean/oceanmodel_guide.cpp, notes named "momo-…") keeps
-    // the ocean's own drawing: as a card made from a note it would say it came from the user's library, which it did not.
-    // (The walk's lessons are cards of this library's own: lesson.cpp.)
-    if (ref.kind == Ref::Kind::note && ref.id.rfind("momo-", 0) == 0) return std::nullopt;
     std::string id = ref.kind == Ref::Kind::note ? ref.id : ref.key();
     if (has(id)) return id;
+    // GUIDE: what Momo answers with on the welcome walk (core/ocean/oceanmodel_guide.cpp, notes named "momo-…") is held
+    // there as a card of this library, as a served note is drawn (WS103); it is never made here from the note, since as
+    // a card made from a note it would say it came from the user's library, which it did not.
+    if (ref.kind == Ref::Kind::note && ref.id.rfind("momo-", 0) == 0) return std::nullopt;
     std::shared_ptr<const Catalog> catalog = held().lock();
     std::optional<OceanCard> card = catalog ? oceanCard(*catalog, ref) : std::nullopt;
     if (!card) return std::nullopt;
