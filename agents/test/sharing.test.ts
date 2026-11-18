@@ -23,7 +23,9 @@ const B = 'device-bbbbbbbbbbbb';
 const ZOE = { id: 777, first_name: 'Zoe' };
 const LINE = { text: 'A friend just shared a tree with you. I planted it right here!', pcm: new Uint8Array(48 * 500) };
 const PICTURE = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 0xff, 0xd9]);
-const LINK = /^Forward this to a friend who uses Mind Forest, and “(.+)” will grow in their forest:\nhttps:\/\/t\.me\/mind_palace_test_bot\?start=share-([A-Za-z0-9_-]{12})$/;
+/** The message to forward, which reads right in the friend's chat. A line to the sharer on what to do comes just before it. */
+const LINK = /^A friend shared a tree with you in Mind Forest: “(.+)”\. Tap to plant it in your forest: https:\/\/t\.me\/mind_palace_test_bot\?start=share-([A-Za-z0-9_-]{12})$/;
+const NOTE = 'Forward the next message to a friend who uses Mind Forest.';
 
 const opened: { close(): Promise<void> }[] = [];
 afterEach(async () => {
@@ -155,6 +157,8 @@ test('a tree shared from one headset goes through Telegram as a link, survives a
   assert.deepEqual(sharer.seen.find((m) => m.t === 'shared'), { t: 'shared', tree: tree.id, ok: true });
   const offer = await s.bot.reply(ADA.id, LINK, 'sendMessage', after);
   const [, title, code] = LINK.exec(offer.text)!;
+  const posted = s.bot.sent.slice(after).filter((m) => m.chat === ADA.id).map((m) => m.text);
+  assert.deepEqual(posted, [NOTE, offer.text], 'what to do, then the message to forward');
   assert.equal(title, tree.title);
   assert.deepEqual((await state(s.hosted, A)).trees.map((t) => t.id), theirs.trees.map((t) => t.id), 'the sharer keeps their tree: a copy was shared');
   sharer.off();
