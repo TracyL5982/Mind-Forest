@@ -73,11 +73,20 @@ static void layLapHand(bool there) {
                                  {Joint::ringMetacarpal, Joint::ringProximal, Joint::ringIntermediate, Joint::ringDistal, Joint::ringTip},
                                  {Joint::littleMetacarpal, Joint::littleProximal, Joint::littleIntermediate, Joint::littleDistal, Joint::littleTip}};
     const float side[4] = {0, -0.02f, -0.038f, -0.054f}, reach[4] = {1, 1.04f, 0.97f, 0.82f};
+    // `-lapFist`: the same hand closed, as a hand left resting in a fist is (WS75: on the headset one kept every pinch of the
+    // other hand from being taken).
+    static const bool closed = Flags::has("lapFist");
     for (int k = 0; k < 4; k++) {
         Vec3 base = wrist + r * (side[k] - 0.01f);
         float s = reach[k];
         at(fingers[k][0], base + f * 0.03f + r * side[k] * 0.5f);
         at(fingers[k][1], base + f * 0.095f * s);
+        if (closed) {
+            at(fingers[k][2], base + f * 0.1f - u * 0.03f);
+            at(fingers[k][3], base + f * 0.08f - u * 0.035f);
+            at(fingers[k][4], base + f * 0.06f - u * 0.03f);
+            continue;
+        }
         at(fingers[k][2], base + f * 0.135f * s - u * 0.008f);
         at(fingers[k][3], base + f * 0.16f * s - u * 0.016f);
         at(fingers[k][4], base + f * 0.175f * s - u * 0.022f);
@@ -90,7 +99,7 @@ static void layLapHand(bool there) {
     h.aimValid = false;
     h.systemGesture = false;
     h.pinchStrength = 0;
-    h.graspStrength = 0;
+    h.graspStrength = closed ? 1 : 0;
 }
 
 int main(int argc, char** argv) {

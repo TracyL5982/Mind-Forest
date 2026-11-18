@@ -380,6 +380,8 @@ public:
     /// pinched point is now and where it was when the pinch landed, in world space.
     virtual void pinchChanged(const EntityRef& entity, Vec3 at, Vec3 start) = 0;
     virtual void pinchEnded(Vec3 at) = 0;
+    /// Quest only: the hand a pinch beginning is made with (0 left, 1 right), just before its first `pinchChanged`.
+    virtual void pinchBegan(int /*hand*/) {}
     /// Quest only: what the ray of the hand that held a pinch is on as it lets go, just before `pinchEnded`.
     virtual void pinchReleasedOver(const EntityRef& /*entity*/) {}
     /// Both hands pinching: how far apart they are now, as a ratio of where they started.

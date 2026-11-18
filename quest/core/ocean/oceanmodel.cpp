@@ -738,6 +738,7 @@ void OceanModel::feelHologram() {
                 hands->quiet = false;
                 // (The hold is the small tree's own: while a hand is on it the hands are quiet and set none of theirs.)
                 hands->busyUntil = std::min(hands->busyUntil, mediaTime());
+                for (double& b : hands->handBusy) b = std::min(b, mediaTime());
             }
             if (hold == HoloReach::Hold::letGo) {
                 logLine("[ocean] the finger on the small tree is out of view: it lets go");

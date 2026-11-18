@@ -143,6 +143,11 @@ public:
     std::string status = "not started";
     /// A fist or a blade was seen this recently: pinches meanwhile aren't taps.
     double busyUntil = 0;
+    /// NOTE(port): added for Quest (WS75, from the headset). The same, for each hand (0 left, 1 right): a fist held in one
+    /// hand says nothing of a pinch made with the other. (A left hand resting closed kept every pinch of the right from
+    /// being taken.) Palms together, and `hold`, busy both.
+    double handBusy[2] = {0, 0};
+    bool busyFor(int hand) const { return hand >= 0 && hand < 2 && mediaTime() < handBusy[hand]; }
 
 private:
     struct Axes {
