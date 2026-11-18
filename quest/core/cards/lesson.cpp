@@ -16,7 +16,7 @@ namespace cards {
 namespace {
 
 /// The lesson's number on the small face's stage: as large for it as on the stage the guide drew before.
-constexpr Setting figure{50, 50, Font::Weight::semibold};
+constexpr Setting figure{34, 36, Font::Weight::semibold};  // (smaller, the user: at 50 it stood at the top edge)
 
 /// The title's plate always has room for two lines, so every lesson's face is laid out alike: the same stage, the
 /// number at the same place on it, and the title starting at the same height, whether it takes one line or two (WS103).
