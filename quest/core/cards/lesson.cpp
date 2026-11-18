@@ -58,7 +58,18 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
         if (!src.empty()) pen.picture(src, box, false, words);
         pen.mask(box, 14 * pen.k, palette::glass);
     });
-    sheet.paragraph(item.summary, setting::body, palette::ink);
+    // (Its words in paragraphs where they have a blank line between: the user's for the first lesson, WS101. The break may come
+    // as the two characters of its escape, the way the ocean's notes reach the card library.)
+    std::string said = item.summary;
+    for (size_t at; (at = said.find("\\n")) != std::string::npos;) said.replace(at, 2, "\n");
+    for (size_t from = 0; from <= said.size();) {
+        size_t cut = said.find("\n\n", from);
+        sheet.paragraph(said.substr(from, cut == std::string::npos ? std::string::npos : cut - from), setting::body, palette::ink);
+        if (cut == std::string::npos) break;
+        from = cut + 2;
+    }
+    // (Said, whole, so what the card library adds of words not yet said leaves it be.)
+    sheet.said.push_back(item.summary);
 }
 
 std::vector<std::string> pictures(const Json& props) { return {text(props["src"])}; }

@@ -72,7 +72,10 @@ const TourStep tourSteps[] = {
     // WS101: the first two lessons are a tree's two moves, done: a pinch opens a card where it stands (the walk begins with
     // this one closed), and a long pinch, held till the ring fills, grows a new layer from one (card 2).
     {"welcome", "hold", "Welcome to Mind Forest",
-     "Around you is everything Momo remembers. A pinch opens a card. Point at card 2, pinch and hold until the ring fills: a new layer grows around it.", "ask", "", "", 2, 0.92f,
+     // (The user's own words, WS101: two paragraphs, the blank line between kept by the lesson card, core/cards/lesson.cpp.)
+     "Around you is an ocean of inspirations collected with Momo, your AI thinking partner, where every tree is a project in play. "
+     "Pinch a card to open it. Pinch and hold to sprout a new layer around it.\\n\\n"
+     "Try it now: pinch and hold Card 2 until the ring fills to watch a new layer grow.", "ask", "", "", 2, 0.92f,
      // (The line over the tree stays short: longer, it ran in behind the picture beside card 1. The card's text says what it does.)
      "Point at card 2, pinch and hold until the ring fills"},
     {"welcome-pan", "carry", "Grab to pan",
