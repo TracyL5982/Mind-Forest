@@ -16,6 +16,8 @@ import { chatContext, readMessage } from './momo-chat.ts';
 import { matchTrees, treeLines } from './tree-asks.ts';
 import { landedCards, nameOf, runTool, toolLabel, toolSpecs, whereNote } from '../core/voice-tools.ts';
 import { LiveVoice, RATE, type LiveOptions, type OpenRealtime, type VoiceFrame } from './live.ts';
+import { copyOf, plantingOf, SHARE_BYTES, SHARE_CARDS, type ShareAnswer, type SharedFile, type TreeCopy } from '../core/sharing.ts';
+import { Gifts, type GiftPace } from './gifts.ts';
 import type { Maps } from './geocoder.ts';
 import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
 import { SPEECH_VOICE, HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, heardMs, spokenMs, questWavMs, type Speak, type Transcribe } from './speech-openai.ts';
@@ -77,6 +79,17 @@ export interface ServerOptions {
   contact?: (desk: Desk) => Channel;
   /** Hosted mode: what this space's device may still do today, and where its use and spend are counted. */
   meter?: Meter;
+  /**
+   * Sharing a tree with a friend (the hosted service): a copy of a tree shared from here goes out through the person's Telegram,
+   * and trees friends shared with them grow here when the headset is next put on, with Momo's recorded `line` for it.
+   */
+  sharing?: {
+    share(copy: TreeCopy, files: SharedFile[]): Promise<ShareAnswer>;
+    /** A tree shared under `code` grew here: its sharer is told. */
+    planted(code: string): void;
+    line?: { text: string; pcm: Uint8Array };
+    pace?: Partial<GiftPace>;
+  };
   /** Hosted mode: the largest file one upload may be, and what this space's uploads may come to in all, in bytes. */
   uploads?: { file: number; total: number };
   /** The demo: one prepared tree played round by round, with a page to go to any round (src/demo, agents/demo/README.md). */
@@ -119,6 +132,11 @@ export interface Space {
   pipeline: Pipeline;
   mind: Mindstorm;
   demo: Director | null;
+  /**
+   * Takes a tree a friend shared, under its code: its files are copied here, and it is held to grow when the headset is next put
+   * on. Or why it could not take it, in a few words ending with a full stop.
+   */
+  receiveShared(code: string, copy: TreeCopy, files: SharedFile[]): Promise<{ ok: true } | { ok: false; why: string }>;
   /** Answers one request. The caller has checked nothing. */
   serve(req: IncomingMessage, res: ServerResponse): Promise<void>;
   upgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void;
@@ -258,8 +276,9 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     if (message.t === 'change') broadcast({ ...message, undo: pipeline.undoLabel() }, asker?.ws);
     else if (message.t === 'navigate') broadcast(message, asker?.ws);
     else broadcast(message);
-    // A take says its own lines: Momo is told nothing of its cards, or she would tell of them again in words of her own.
-    if (!director?.directing()) asker?.voice?.observed(message);
+    // A take says its own lines: Momo is told nothing of its cards, or she would tell of them again in words of her own. Nor of a
+    // shared tree's, which grows with its own line.
+    if (!director?.directing() && !gifts?.growing()) asker?.voice?.observed(message);
   };
 
   const liveRoles = meter ? metered(opts.roles, meter) : opts.roles;
@@ -290,6 +309,59 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     playback,
   });
   pipeline.resume();
+
+  /** The headset joined to this space, the newest: what a shared tree grows on, and where Momo's line for it is said. */
+  const headset = (): WebSocket | undefined => [...sockets].filter((ws) => ws.readyState === ws.OPEN && plays.get(ws)?.embeds === false).at(-1);
+  const sharing = opts.sharing;
+  /** Trees friends shared with this person, held to grow when the headset is next put on (the hosted service). */
+  const gifts: Gifts | null = sharing
+    ? new Gifts({
+        file: join(opts.dataDir, 'shared-trees.json'),
+        pace: sharing.pace,
+        stage: (origin, label, commands) => {
+          const ws = headset();
+          asking.run({ ws, voice: ws && voices.get(ws) }, () => pipeline.stage(origin, label, commands));
+        },
+        watched: () => headset() !== undefined,
+        planted: (treeId) => mind.trees.has(treeId),
+        // Her recorded line on the headset's voice socket, its caption shown as its sound plays; none when the socket is shut.
+        speak: () => {
+          const ws = headset();
+          const live = ws && liveOf.get(ws);
+          const line = sharing.line;
+          if (!line || !live || live.readyState !== live.OPEN) return 0;
+          const id = `shared-${++lines}`;
+          const ms = Math.round(line.pcm.length / ((RATE / 1000) * 2));
+          const send = (frame: VoiceFrame) => live.send(JSON.stringify(frame));
+          send({ t: 'text', id, text: line.text, kind: 'reply', ms, from: 0 });
+          const piece = (RATE / 10) * 2;
+          for (let at = 0; at < line.pcm.length; at += piece) send({ t: 'audio', id, pcm: Buffer.from(line.pcm.subarray(at, at + piece)).toString('base64') });
+          send({ t: 'done', id });
+          return ms;
+        },
+        grew: (gift) => sharing.planted(gift.code),
+        log,
+      })
+    : null;
+  /** A copy of a tree and its files, shared from here, or why it cannot go. */
+  const shareTree = async (treeId: string): Promise<ShareAnswer> => {
+    const copy = copyOf(mind, treeId);
+    if (!copy || !sharing) return { ok: false, reason: 'unavailable', text: 'That tree can’t be shared just now.' };
+    const tooBig: ShareAnswer = { ok: false, reason: 'too-big', text: `That tree is too big to share: ${SHARE_CARDS} cards and ${SHARE_BYTES / 1e6} MB of pictures at most.` };
+    if (copy.nodes.length > SHARE_CARDS) return tooBig;
+    const files: SharedFile[] = [];
+    let bytes = 0;
+    for (const id of copy.assets) {
+      const stored = assets.open(id);
+      if (!stored) continue;
+      if ('bytes' in stored) {
+        bytes += stored.bytes.length;
+        if (bytes > SHARE_BYTES) return tooBig;
+        files.push({ id, mime: stored.mime, bytes: stored.bytes });
+      } else files.push({ id, mime: stored.mime, link: 'file' in stored ? stored.file : stored.url });
+    }
+    return sharing.share(copy, files);
+  };
 
   if (opts.demo) {
     /** The headset the demo is shown on: the newest connection that said it is one, or else the newest client. */
@@ -859,17 +931,24 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       case 'client':
         plays.set(ws, m.media);
         if (director && m.media.embeds === false) director.joined();
+        else if (m.media.embeds === false) gifts?.returned();
         return;
       case 'worn':
-        director?.worn(m.away);
+        if (director) director.worn(m.away);
+        else gifts?.returned(m.away);
         return;
       case 'share':
-        // So far only the demo shares a tree, with the user as the friend (the film). Between two people it is to come.
-        if (!director) {
+        // The demo shares a tree with the user as the friend (the film); the hosted service, through the person's Telegram, with a
+        // friend who uses it too, and tells the headset how it went. Any other service shares nothing.
+        if (director) {
+          await director.share(m.tree).catch((err) => ws.send(JSON.stringify({ t: 'error', message: `the tree was not shared: ${err instanceof Error ? err.message : String(err)}` })));
+          return;
+        }
+        if (!sharing) {
           ws.send(JSON.stringify({ t: 'error', message: 'sharing a tree with a friend is not ready on this service yet' }));
           return;
         }
-        await director.share(m.tree).catch((err) => ws.send(JSON.stringify({ t: 'error', message: `the tree was not shared: ${err instanceof Error ? err.message : String(err)}` })));
+        ws.send(JSON.stringify({ t: 'shared', tree: m.tree, ...(await shareTree(m.tree).catch((): ShareAnswer => ({ ok: false, reason: 'unavailable', text: 'That tree can’t be shared just now.' }))) }));
         return;
       case 'dump':
         await pipeline.dump(m.dumps);
@@ -879,6 +958,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         return;
       case 'focus':
         pipeline.focus(m.nodeId);
+        gifts?.focused(m.nodeId);
         return;
       case 'questions':
         ws.send(JSON.stringify({ t: 'questions', nodeId: m.nodeId, questions: await pipeline.questions(m.nodeId) }));
@@ -917,6 +997,15 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     pipeline,
     mind,
     demo: director,
+    async receiveShared(code, copy, files) {
+      if (!gifts) return { ok: false, why: 'this headset does not take shared trees.' };
+      const bytes = files.reduce((n, file) => n + (file.bytes?.length ?? 0), 0);
+      if (opts.volumeFull?.() || !assets.room(bytes)) return { ok: false, why: 'your headset has no room left for its pictures.' };
+      const moved = new Map<string, string>();
+      for (const file of files) moved.set(file.id, (file.bytes ? await assets.put(file.bytes, file.mime, file.name) : await assets.link(file.link!, file.mime, file.name)).id);
+      gifts.hold({ code, title: copy.title, planting: plantingOf(copy, moved, () => randomUUID(), new Date().toISOString()) });
+      return { ok: true };
+    },
     serve,
     upgrade,
     online: () => sockets.size + liveWss.clients.size,

@@ -40,6 +40,23 @@ const LFS_POINTER = 1000;
 /** A line is a few sentences. Longer is cut, so one box cannot ask for minutes of speech. */
 export const MAX_LINE = 1200;
 
+/**
+ * A line said outside any round (`said` in the demo folder's lines.json, by what it is for) with its recording in Momo's realtime
+ * voice, as the hosted service ships it; null while either is missing.
+ */
+export function savedLine(demoDir: string, key: string): { text: string; pcm: Uint8Array } | null {
+  const file = join(demoDir, 'lines.json');
+  if (!existsSync(file)) return null;
+  const lines = LinesFile.parse(JSON.parse(readFileSync(file, 'utf8')));
+  const text = lines.said?.[key];
+  if (!text) return null;
+  const name = recordingName(lines.voice, text);
+  const voices = join(demoDir, 'voice', 'voices.json');
+  const recording = join(demoDir, 'voice', name);
+  if (!existsSync(voices) || read(voices)[name] !== 'realtime' || !existsSync(recording) || statSync(recording).size <= LFS_POINTER) return null;
+  return { text, pcm: new Uint8Array(readFileSync(recording)) };
+}
+
 /** The file a recording of these exact words in this voice is kept in: the same words are the same file, wherever they are said. */
 export const recordingName = (voice: string, text: string): string => `${createHash('sha1').update(`${voice}\n${text}`).digest('hex').slice(0, 20)}.pcm`;
 
