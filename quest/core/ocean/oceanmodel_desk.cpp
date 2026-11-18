@@ -583,3 +583,29 @@ void OceanModel::coverButton(int uid, int which) {
     i->buttonsUntil = time + buttonsSay;
     showButtons(*i, which);
 }
+
+void OceanModel::letGo(const TreeRef& tree) {
+    if (!tree) return;
+    if (this->tree == tree) {
+        lettingGo.insert(tree.get());
+        logLine("[ocean] " + tree->title + " stands until it is put away, and is then let go");
+        return;
+    }
+    for (auto i = shelf.begin(); i != shelf.end(); ++i) {
+        if (i->tree != tree) continue;
+        EntityRef holder = i->mover->entity;
+        picks.erase(holder.get());
+        if (i->buttons) {
+            for (const EntityRef& b : i->buttons->children) picks.erase(b.get());
+        }
+        holder->inputTarget = false;
+        i->mover->alpha.go(0, time, 0.4f);
+        i->mover->removeAt = time + 0.45;
+        touch(time + 0.5);
+        logLine("[ocean] its cover leaves the desk: " + tree->title);
+        shelf.erase(i);
+        rakeForest();
+        shelfDirty = true;
+        return;
+    }
+}

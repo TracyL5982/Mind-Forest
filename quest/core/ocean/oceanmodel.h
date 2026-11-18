@@ -493,6 +493,10 @@ private:
     static constexpr double hoverGrace = 1.0;
     static constexpr float buttonText = 0.022f;         // m, in a tree's own measure: about 3.7 cm tall on the desk
     static constexpr double buttonsSay = 1.8;           // s the pressed button says it took
+    /// AGENT: a tree no longer to be kept (one the service made again, agent::Bridge): its cover leaves the desk; standing,
+    /// it stays until it is put away, and is then let go rather than shelved (`lettingGo`).
+    void letGo(const TreeRef& tree);
+    std::set<const Tree*> lettingGo;
     /// AGENT: a press on one: 0 asks the service for the tree's handoff, 1 shares it; the button says so for a moment.
     void coverButton(int uid, int which);
     void showButtons(Shelved& s, int pressed);
