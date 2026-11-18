@@ -78,8 +78,19 @@ const ANSWER_WAIT_MS = 4000;
  * 0.51 s at the median and 1.49 s at the slowest (403 turns); 2 of 77 calls that started a Scout run came before it, by 50 and 68 ms.
  */
 const SAID_MS = 1500;
-/** Calls whose output Momo always speaks from. The others act, and Momo said what it is doing as it called them. */
-const ANSWERS = new Set(['web_answer', 'look_up_mindstorm']);
+/**
+ * Calls whose output Momo always speaks from, even after a lead-in of her own: what they give is for the user to hear (a Telegram
+ * pairing code among them). The others act, and Momo said what it is doing as it called them.
+ */
+const ANSWERS = new Set(['web_answer', 'look_up_mindstorm', 'connect_telegram']);
+const DIGITS: Record<string, string> = { zero: '0', oh: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9' };
+const DIGIT = '(?:zero|oh|one|two|three|four|five|six|seven|eight|nine)';
+const SPELLED = new RegExp(`\\b${DIGIT}\\b(?:[\\s,.…–—-]+${DIGIT}\\b){2,}`, 'gi');
+
+/** Digits she spells out in words, three or more in a row, written as digits: "four, eight, two" is "4 8 2". */
+export function inDigits(text: string): string {
+  return text.replace(SPELLED, (run) => run.split(/[^a-z]+/i).filter(Boolean).map((word) => DIGITS[word.toLowerCase()]).join(' '));
+}
 
 /**
  * Dollars per million tokens (https://developers.openai.com/api/docs/pricing): the realtime models as read on 2026-11-14, the
@@ -468,6 +479,8 @@ export class LiveVoice {
   private names = new Map<string, string>();
   /** Every call run, so one announced twice runs once. */
   private ran = new Set<string>();
+  /** A call gave her a code to say (Telegram's pairing code): until the next turn her captions show spelled-out digits as digits. */
+  private code = false;
   /** A response the model refused to begin while another was under way, to ask for again. */
   private refused: Purpose | null = null;
   private ready: Ready[] = [];
@@ -523,6 +536,7 @@ export class LiveVoice {
         const s = this.ensure();
         if (this.naming) this.naming.turn = true;
         this.hush();
+        this.code = false;
         this.scene = frame.scene;
         s.send({ type: 'session.update', session: { type: 'realtime', audio: { input: { transcription: this.transcription(frame.scene) } } } });
         s.send({ type: 'input_audio_buffer.clear' });
@@ -849,7 +863,7 @@ export class LiveVoice {
         const m = this.speaking;
         if (!m || m.id !== e.response_id) return;
         m.text += e.delta as string;
-        this.device({ t: 'text', id: m.id, text: m.text, kind: m.purpose.kind, ...(m.purpose.kind === 'reply' && m.purpose.turn !== undefined ? { turn: m.purpose.turn } : {}) });
+        this.device({ t: 'text', id: m.id, text: this.code ? inDigits(m.text) : m.text, kind: m.purpose.kind, ...(m.purpose.kind === 'reply' && m.purpose.turn !== undefined ? { turn: m.purpose.turn } : {}) });
         return;
       }
       case 'response.output_audio.delta': {
@@ -951,6 +965,7 @@ export class LiveVoice {
     step(output.error ? 'error' : 'done');
     this.calls.delete(call);
     this.deps.log(`[live] ${name}(${args}) answered in ${this.now() - at} ms: ${JSON.stringify(output).slice(0, 400)}`);
+    if (typeof output.code === 'string') this.code = true;
     if (!this.session) return;
     // An act Momo announced as it called it needs no more words, unless it could not be done or nothing was heard of the turn yet.
     const answer = ANSWERS.has(name) || 'error' in output || 'why' in output || (turn !== undefined && this.answering?.turn === turn);

@@ -294,7 +294,11 @@ export const TOOLS: Record<string, Tool> = {
         bot: `@${invite.bot}`,
         code: `${invite.code.slice(0, 3)} ${invite.code.slice(3)}`,
         ...(paired ? { already: `Telegram is connected as ${paired} now. The chat that sends this code takes its place.` } : {}),
-        note: 'Tell the user to open Telegram, find the bot by this name, and send it this code. Say the bot\'s name as given, then the code one digit at a time. It works once, for ten minutes. Say nothing else.',
+        // Said in full even after a lead-in of hers ("one moment while I pull up the details"): the code is what the user waits for.
+        note:
+          'Now tell the user, even if you already said something: open Telegram, find the bot by this name, and send it this code. Say the bot\'s name as given. ' +
+          'Then say the code slowly, one digit at a time with a short pause after each, writing each digit as a numeral with a comma after it. ' +
+          'Say that it works once, for ten minutes. Then say the code once more, digit by digit. Say nothing else.',
       };
     },
   },

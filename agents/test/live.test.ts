@@ -270,6 +270,27 @@ test('an act Momo announced as it called it needs no further response; one that 
   assert.equal(model.sent('response.create').length, 1, 'Momo says why it could not');
 });
 
+test("connecting Telegram: after a lead-in, Momo is still asked to say the bot and the code, and her caption shows the code in digits until the next turn", async () => {
+  const { model, turn, answers, of } = voice();
+  answers.connect_telegram = async () => ({ done: true, bot: '@a_bot', code: '482 917', note: 'Say the bot and the code.' });
+  turn(1, 'Connect my Telegram.');
+  model.begins('r1');
+  model.says('r1', "Okay, let's get your Telegram connected—one moment while I pull up the pairing details.");
+  model.calls('r1', 'c1', 'connect_telegram', {});
+  model.ends('r1');
+  await tick();
+  assert.equal(model.outputs().length, 1);
+  assert.deepEqual(model.sent('response.create').map((e) => e.response), [{ metadata: { purpose: 'reply' } }], 'she is asked to say what the tool gave her');
+  model.begins('r2', 'reply');
+  model.says('r2', 'Open Telegram and find @a_bot. Send it this code: four, eight, two, nine, one, seven. It works once, for ten minutes.');
+  model.ends('r2');
+  assert.equal(of('text').at(-1)!.text, 'Open Telegram and find @a_bot. Send it this code: 4 8 2 9 1 7. It works once, for ten minutes.');
+  turn(2, 'Thanks, one two three.');
+  model.begins('r3');
+  model.says('r3', 'You said one, two, three.');
+  assert.equal(of('text').at(-1)!.text, 'You said one, two, three.', 'a new turn: her words as she says them');
+});
+
 test('a turn whose answer says nothing and waits on no call tells the device none is coming; one that calls first keeps thinking', async () => {
   const { model, of, turn } = voice();
   turn(1, 'Hmm.');
