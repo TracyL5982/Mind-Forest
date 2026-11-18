@@ -131,7 +131,7 @@ quest/tools/run.sh --log              # follow the app's log
 
 ### The judging build
 
-One APK that a judge installs and opens, with nothing to set up: "Mind Forest", `com.kaifengwu.mindpalace.ocean.judge`.
+One APK that a judge installs and opens, with nothing to set up: "Mind Forest", `com.mindforest.app`.
 
 ```bash
 quest/tools/judge.sh             # build it and check its id, name, signature and media
