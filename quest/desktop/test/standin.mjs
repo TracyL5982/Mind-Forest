@@ -282,11 +282,13 @@ export async function standIn(name, source, { demo = false } = {}) {
     preview.stderr.on('data', (chunk) => {
       const lines = (partial + chunk).split('\n');
       partial = lines.pop();
-      for (const line of lines) if (/^\[(agent|ocean|cards|sound|film)\]/.test(line)) log.push({ at: (Date.now() - began) / 1000, line });
+      for (const line of lines) if (/^\[(agent|ocean|cards|sound|film|guide)\]/.test(line)) log.push({ at: (Date.now() - began) / 1000, line });
     });
     const done = new Promise((resolve) => preview.on('exit', resolve));
     const sent = (t) => fromPreview.filter((m) => m.message.t === t && m.when >= began).map((m) => ({ ...m.message, at: (m.when - began) / 1000 }));
-    return { log, done, began, sent, at: () => (Date.now() - began) / 1000, stop: () => preview.exitCode === null && preview.kill() };
+    // (Everything it sent the service, of any kind.)
+    const sentAll = () => fromPreview.filter((m) => m.when >= began).map((m) => m.message);
+    return { log, done, began, sent, sentAll, at: () => (Date.now() - began) / 1000, stop: () => preview.exitCode === null && preview.kill() };
   }
 
   async function close() {

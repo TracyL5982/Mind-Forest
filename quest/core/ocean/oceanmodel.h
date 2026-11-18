@@ -1688,6 +1688,9 @@ private:
 
     /// (`shelfURL`: the file's path; "" if there is nowhere to keep it.)
     static std::string shelfURL();
+    /// AGENT (WS98): joined to the agent service, the file the welcome tree is kept in, the one tree of the headset's own
+    /// that stands in the forest among the service's (ShelfFile's form, holding it alone).
+    static std::string welcomeURL();
 
     /// The covers from last time, each where it was left; the first time
     /// (or with `-freshShelf`), the two trees ocean.json starts with.

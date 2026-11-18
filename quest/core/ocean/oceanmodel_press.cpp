@@ -799,6 +799,22 @@ std::string OceanModel::shelfURL() {
     return folder + "/ocean-shelf.json";
 }
 
+std::string OceanModel::welcomeURL() {
+    std::string folder = platform::dataDirectory();
+    if (folder.empty()) return "";
+    return folder + "/welcome-shelf.json";
+}
+
+namespace {
+/// Whether a saved tree is the welcome tree: the walk's, rooted on its first lesson (Tree::walk).
+bool welcomeTree(const Tree::Saved& tree) {
+    for (const TreeNode& n : tree.nodes) {
+        if (n.ref.kind == Ref::Kind::note && n.ref.id == "welcome") return true;
+    }
+    return false;
+}
+}  // namespace
+
 /// The covers from last time, each where it was left; the first time
 /// (or with `-freshShelf`), the two trees ocean.json starts with.
 void OceanModel::loadShelf(const std::shared_ptr<Catalog>& catalog) {
@@ -807,10 +823,10 @@ void OceanModel::loadShelf(const std::shared_ptr<Catalog>& catalog) {
         bool& flag;
         ~Done() { flag = true; }
     } done{shelfLoaded};
-    // AGENT: joined to the agent service, the shelf holds the service's trees only (the bridge hangs them),
-    // so the trees this app keeps itself, and the two it starts with, stay in their file untouched.
-    if (agentBridge) return;
-    std::string url = shelfURL();
+    // AGENT: joined to the agent service, the shelf holds the service's trees (the bridge hangs them) and, of the trees
+    // this app keeps itself, only the welcome tree, from a file of its own (`welcomeURL`, WS98: it stays in the forest
+    // after the walk). The others, and the two it starts with, stay in their file untouched.
+    std::string url = agentBridge ? welcomeURL() : shelfURL();
     if (Flags::has("freshShelf") && !url.empty()) std::remove(url.c_str());
     std::optional<std::string> data = url.empty() ? std::nullopt : platform::readFile(url);
     std::optional<Json> json = data ? Json::parse(*data) : std::nullopt;
@@ -821,18 +837,14 @@ void OceanModel::loadShelf(const std::shared_ptr<Catalog>& catalog) {
         bool sameWorks = file->works == catalog->worksKey;
         int dropped = 0;
         // Of the welcome trees a file may hold from before there was only ever one, the last is kept.
-        auto welcome = [](const ShelfFile::Item& item) {
-            for (const TreeNode& n : item.tree.nodes) {
-                if (n.ref.kind == Ref::Kind::note && n.ref.id == "welcome") return true;
-            }
-            return false;
-        };
+        auto welcome = [](const ShelfFile::Item& item) { return welcomeTree(item.tree); };
         const ShelfFile::Item* lastWelcome = nullptr;
         for (const ShelfFile::Item& item : file->trees) {
             if (welcome(item)) lastWelcome = &item;
         }
         for (const ShelfFile::Item& item : file->trees) {
             if (welcome(item) && &item != lastWelcome) continue;
+            if (agentBridge && !welcome(item)) continue;
             bool holdsWorks = false;
             for (const TreeNode& n : item.tree.nodes) {
                 if (n.ref.kind == Ref::Kind::work) holdsWorks = true;
@@ -845,9 +857,11 @@ void OceanModel::loadShelf(const std::shared_ptr<Catalog>& catalog) {
             }
         }
         if (dropped > 0) logLine(fmt("[ocean] shelf: %d covers held works the library has since changed, and were let go", dropped));
-        logLine(fmt("[ocean] shelf: %d covers kept from last time", int(shelfWaiting.size())));
+        logLine(fmt(agentBridge ? "[ocean] shelf: the welcome tree kept from last time (%d)" : "[ocean] shelf: %d covers kept from last time",
+                    int(shelfWaiting.size())));
         return;
     }
+    if (agentBridge) return;
     for (const SavedSpec& spec : catalog->saved) {
         if (TreeRef t = Tree::replay(spec, catalog)) shelve(t, std::nullopt);
     }
@@ -872,16 +886,19 @@ void OceanModel::shelveWaiting() {
 void OceanModel::saveShelf() {
     shelfDirty = false;
     // AGENT: joined to the agent service, the shelf holds the service's trees, which the service keeps; the bridge writes
-    // down where they stand on the desk (core/agent/plots.h), and the headset's own shelf file is left as it was.
-    if (agentBridge) {
-        agentBridge->saveShelf();
-        return;
-    }
-    std::string url = shelfURL();
+    // down where they stand on the desk (core/agent/plots.h), and the headset's own shelf file is left as it was. The
+    // welcome tree, the one tree of the headset's own among them, is written to a file of its own (WS98).
+    if (agentBridge) agentBridge->saveShelf();
+    std::string url = agentBridge ? welcomeURL() : shelfURL();
     if (url.empty() || !catalog) return;
     std::vector<ShelfFile::Item> items = shelfWaiting;     // (none, by the time anything is written: see `update`)
     for (const Shelved& cover : shelf) items.push_back(ShelfFile::Item{cover.tree->saved(), cover.spot, cover.plot});
     if (tree && standingSpot) items.push_back(ShelfFile::Item{tree->saved(), *standingSpot, standingPlot});
+    if (agentBridge) {
+        items.erase(std::remove_if(items.begin(), items.end(), [](const ShelfFile::Item& item) { return !welcomeTree(item.tree); }), items.end());
+        // (No welcome tree yet, or not put away: what the file holds stays.)
+        if (items.empty()) return;
+    }
     std::string data = ShelfFile(int(catalog->clips.size()), catalog->worksKey, items).json().dump();
     platform::writeFile(url, data);
 }
