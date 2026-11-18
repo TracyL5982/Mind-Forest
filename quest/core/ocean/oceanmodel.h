@@ -502,7 +502,11 @@ private:
     std::set<const Tree*> lettingGo;
     /// AGENT: a press on one: 0 asks the service for the tree's handoff, 1 shares it; the button says so for a moment.
     void coverButton(int uid, int which);
-    void showButtons(Shelved& s, int pressed);
+    void showButtons(Shelved& s, int pressed, const std::string& said = "");
+    /// AGENT: the service would not share a tree (`reason`): its Share button says why for `buttonsSay` s, the buttons
+    /// shown again if they had gone. unpaired: "Pair Telegram first" (the lead's words); limit, too-big, unavailable: a
+    /// short line each (mine). The service's own line is logged, not shown.
+    void shareRefused(const Tree& tree, const std::string& reason);
     /// AGENT: `-hoverCover <i> -hoverCoverAt <s>`: the cover at that place on the shelf counts as hovered from then (for
     /// `-hoverCoverFor <s>`, 6), as a ray resting on it would make it, for pictures and checks.
     int hoverForced = -1;

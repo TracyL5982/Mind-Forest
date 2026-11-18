@@ -56,6 +56,8 @@ public:
     /// alone in its scope), or to share it (`share`). True when it was told.
     bool sendTree(const Tree& tree);
     bool shareTree(const Tree& tree);
+    /// The hosted service's answer to a share (`shared`): nothing more when taken; when not, the tree's Share button says why.
+    void shareAnswered(const Shared& answer);
     /// A long pinch on a card of a service tree, open or closed (the user's rule, 2026-11-17): one with cards under it is gone
     /// into, its layer standing, and nothing is asked; one with none starts a layer on it and asks for more like it (`moreLike`).
     void longPinch(int nodeID);
