@@ -5,13 +5,6 @@ Mind Forest is a place to think in a Meta Quest 3 headset: what you save and wha
 It is a native OpenXR app for the headset ([quest/](quest/README.md)) and a TypeScript service that runs the agents ([agents/](agents/README.md)).
 
 <p>
-  <img src="docs/in-use-1.jpg" width="24%" alt="Mind Forest at a café counter: trees of pictures over the table">
-  <img src="docs/in-use-2.jpg" width="24%" alt="Mind Forest outdoors by a lake: a layer of cards open in front of the viewer">
-  <img src="docs/in-use-3.jpg" width="24%" alt="Mind Forest in a shop: layers of cards all round, a hand pinching">
-  <img src="docs/in-use-4.jpg" width="24%" alt="Mind Forest outdoors: a tree open in layers, the forest on the grass">
-</p>
-
-<p>
   <img src="docs/lakeside-1.jpg" width="49%" alt="Mind Forest by a lake: a tree open in layers of cards, each layer in its own colour">
   <img src="docs/lakeside-2.jpg" width="49%" alt="A closed hand pulling a layer of the tree forward">
 </p>
