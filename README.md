@@ -1,8 +1,12 @@
 # Mind Forest
 
-Mind Forest is a place to think in a Meta Quest 3 headset: what you save and what you ask about grows into trees of cards that stand in the room around your desk. You work with your hands, and you talk to Momo, an assistant who finds new material, answers questions and files what you send. Things get in from Telegram, and a finished tree leaves as one file that any other agent can pick up.
+Your living mind palace in XR—where scattered seeds of inspiration grow into branching trees of thought with Momo, your AI thinking partner.
 
-It is a native OpenXR app for the headset ([quest/](quest/README.md)) and a TypeScript service that runs the agents ([agents/](agents/README.md)).
+## Inspiration
+
+As creative builders and visual thinkers, we often hit a wall when trying to communicate visual ideas to AI agents or brainstorm inside traditional 2D chat interfaces. Trying to describe a spatial aesthetic in words leads to frustrating results, and scrolling through endless walls of linear text traps non-linear human curiosity inside a flat box. Meanwhile, the real seeds of our inspiration—a branching camellia tree on a walk, an exhibition layout, a film clip, or a sketch—end up scattered across camera rolls, chat threads, Instagram saves, Pinterest boards, FigJam, and Miro.
+
+We asked ourselves: what if AI didn’t try to automate our thinking behind a flat screen, but instead inhabited a 3D space beside us to think *with* us? That question sparked **Mind Forest**—a living spatial mind palace in XR where passthrough runs continuously beneath an ocean of inspiration and your ideas grow into branching trees around your physical desk.
 
 <p>
   <img src="docs/lakeside-1.jpg" width="49%" alt="Mind Forest by a lake: a tree open in layers of cards, each layer in its own colour">
