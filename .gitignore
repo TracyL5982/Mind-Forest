@@ -2,11 +2,12 @@ node_modules/
 dist/
 .DS_Store
 # Film clips and other caches stay out; the Quest app's own small media is kept
-# (the guide's hand model, the greeting's two font files, the synthesized sounds).
+# (the guide's hand model, the greeting's two font files, the synthesized sounds, Momo's recorded lines for the walk).
 media-src/*
 !media-src/quest/
 media-src/quest/*
 !media-src/quest/fonts/
 !media-src/quest/hands/
 !media-src/quest/sounds/
+!media-src/quest/voice/
 quest/vendor

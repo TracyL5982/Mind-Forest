@@ -582,9 +582,12 @@ void OceanModel::addWelcomeNotes() {
     // And what it makes of a sketch: here a stand-in, since the walk's picture is not one Momo knows. It is made
     // again with what was said (`tourAnswer`); the pictures beside it stand for what Momo would bring.
     teach.tourMarkLinks = fmt("{\"to\": \"note:%s\", \"why\": \"Next\"}", tourSteps[markStep + 1].note);
+    teach.tourMarkWork = toMark;
+    teach.tourMarkLike.clear();
     for (int n = 0; n < 3 && works > 0; n++) {
         used += 1;
-        teach.tourMarkLinks += fmt(", {\"to\": \"work:%d\", \"why\": \"Like it\"}", (works * (2 * used - 1)) / 23 % works);
+        teach.tourMarkLike.push_back((works * (2 * used - 1)) / 23 % works);
+        teach.tourMarkLinks += fmt(", {\"to\": \"work:%d\", \"why\": \"Like it\"}", teach.tourMarkLike.back());
     }
 }
 
@@ -1469,9 +1472,34 @@ void OceanModel::tourAnswer(int lesson, const std::string& words) {
     teach.talkNote.clear();
     tourTalkPanel("", false, std::nullopt);
     if (lesson == momoStep) tourDid("momo", 1);
-    // Momo says so itself, where it has a voice.
+    // Momo says so herself, where she has a voice: what she can do in her own recorded words (WS78, the user's choice);
+    // a sketch is put to the live Momo, who answers it and walks through what comes, or failing her, her recorded line.
     if (agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr) {
-        voice->tell(lesson == momoStep ? "Here is what I can do for you. Each card is something to ask me for." : "Here is a layer from your sketch.");
+        if (lesson == momoStep) {
+            voice->tellRecorded("momo-can");
+        } else {
+            agent::Voice::LessonAsk ask;
+            ask.words = words;
+            auto describe = [&](int w) {
+                if (w < 0 || w >= int(catalog->works.size())) return std::string();
+                const Work& k = catalog->works[size_t(w)];
+                std::string out = (k.kind.empty() ? "" : k.kind + ": ") + k.title;
+                for (const std::string* part : {&k.maker, &k.date, &k.medium, &k.museum}) {
+                    if (!part->empty()) out += ", " + *part;
+                }
+                return out;
+            };
+            ask.picture = describe(teach.tourMarkWork);
+            if (teach.tourMarkWork >= 0 && !catalog->works[size_t(teach.tourMarkWork)].about.empty()) ask.picture += ". " + catalog->works[size_t(teach.tourMarkWork)].about;
+            for (int w : teach.tourMarkLike) {
+                if (w < 0 || w >= int(catalog->works.size())) continue;
+                const Work& k = catalog->works[size_t(w)];
+                std::string says = k.maker;
+                if (!k.date.empty()) says += (says.empty() ? "" : ", ") + k.date;
+                ask.cards.push_back({k.title, says});
+            }
+            voice->askLesson(ask, "momo-sketch");
+        }
     }
     sound("ask");
     soundLayerAfter = 0.3;

@@ -25,7 +25,8 @@ namespace platform {
 std::string resourcePath(const std::string& name) {
     // (The works' small copies and the sounds are made by tools/push_media.sh into media-src/quest; the guide's
     // hand model is there too, pulled from the headset once: see tools/hand_mesh.py.)
-    std::string path = name.rfind("works-small/", 0) == 0 || name.rfind("sounds/", 0) == 0 || name.rfind("hands/", 0) == 0 || name.rfind("fonts/", 0) == 0 ? host::repoRoot + "/media-src/quest/" + name
+    std::string path = name.rfind("works-small/", 0) == 0 || name.rfind("sounds/", 0) == 0 || name.rfind("hands/", 0) == 0 || name.rfind("fonts/", 0) == 0 || name.rfind("voice/", 0) == 0
+                           ? host::repoRoot + "/media-src/quest/" + name
         : name.rfind("kws/", 0) == 0 ? host::repoRoot + "/quest/vendor/sherpa-onnx/assets/" + name
         : name.rfind("clips/", 0) == 0 || name.rfind("works/", 0) == 0
         ? host::repoRoot + "/public/" + name

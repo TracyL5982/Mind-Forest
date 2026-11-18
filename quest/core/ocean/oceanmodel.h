@@ -622,6 +622,8 @@ private:
         std::vector<std::pair<bool, std::string>> talkHeard;    // from Momo's ears: the name alone (true), or the words after it
         bool tourSent = false;              // the marked part was sent to Momo: what to say about it is waited for
         std::string tourMarkLinks;          // what the card Momo answers a sketch with points to (`tourMarkNote`)
+        int tourMarkWork = -1;              // the picture the sketch lesson marks (a work), and the pictures its layer brings
+        std::vector<int> tourMarkLike;
         EntityRef talkPanel;                // what is said about it, with the way on without speaking
         std::vector<const Entity*> talkPicks;
         std::string talkPanelSaid;

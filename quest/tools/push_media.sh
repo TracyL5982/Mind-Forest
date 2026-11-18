@@ -57,6 +57,8 @@ sync_dir "$REPO_ROOT/public/clips" clips
 sync_dir "$REPO_ROOT/public/works" works
 sync_dir "$SMALL" works-small
 [ -f "$SOUNDS/manifest.json" ] && sync_dir "$SOUNDS" sounds
+# The welcome walk's lines in Momo's own voice, recorded (WS77/WS78), with their words in voice/manifest.json.
+[ -f "$REPO_ROOT/media-src/quest/voice/manifest.json" ] && sync_dir "$REPO_ROOT/media-src/quest/voice" voice
 # The headset's own hand model, for the guide's hands (in git; written once with `-dumpHandMesh`, see tools/hand_mesh.py).
 [ -f "$REPO_ROOT/media-src/quest/hands/hand-right.bin" ] && sync_dir "$REPO_ROOT/media-src/quest/hands" hands
 # The greeting's lettering (Fraunces 72pt Soft Light and its italic, SIL Open Font License; in git).
