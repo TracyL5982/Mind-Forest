@@ -41,7 +41,10 @@ bool Hands::grabbing(int hand) const {
 }
 
 /// Pinches for the next moment are not taps.
-void Hands::hold(double seconds) { busyUntil = std::max(busyUntil, mediaTime() + seconds); }
+void Hands::hold(double seconds) {
+    busyUntil = std::max(busyUntil, mediaTime() + seconds);
+    for (double& b : handBusy) b = std::max(b, mediaTime() + seconds);
+}
 
 void Hands::start() {
     if (!platform::handTrackingSupported()) {
@@ -199,6 +202,7 @@ void Hands::fist(Hand& hand, Vec3 origin, Vec3 f, double now, std::vector<Event>
         return;
     }
     busyUntil = now + 0.4;
+    handBusy[&hand == &left ? 0 : 1] = now + 0.4;
     if (!hand.fistSince) hand.fistSince = now;
     // Held a moment first, so a hand closing in passing does nothing.
     if (!(hand.fistSince && now - *hand.fistSince > 0.12)) return;
@@ -309,6 +313,7 @@ void Hands::blade(Hand& hand, const Hand& other, double now, std::vector<Event>&
     if (hand.spent || !(now > hand.cutUntil)) return;
     if (!(speed > bladeSpeed)) return;
     busyUntil = now + 0.4;
+    handBusy[&hand == &left ? 0 : 1] = now + 0.4;
     events.push_back(Event::cut(from.mark, *hand.mark));
 }
 
@@ -334,10 +339,12 @@ void Hands::clap(Vec3 f, double now, std::vector<Event>& events) {
         clapSeen = now;
         clapAt = (left.palm + right.palm) * 0.5f;
         busyUntil = now + 0.4;
+        handBusy[0] = handBusy[1] = now + 0.4;
         if (now - *clapSince >= clapHold) {
             clapSince = std::nullopt;
             clapUntil = now + 1.5;
             busyUntil = now + 0.6;
+            handBusy[0] = handBusy[1] = now + 0.6;
             events.push_back(Event::clap());
         }
     } else if (clapSince && now - clapSeen > 0.2) {

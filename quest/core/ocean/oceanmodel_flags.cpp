@@ -35,7 +35,13 @@ void OceanModel::pinchChanged(const EntityRef& entity, Vec3 point, Vec3 start) {
         if (!p) return;
         std::vector<int> riders;
         // A fist or a flat hand can read as a pinch; it isn't one.
-        press = Press{*p, start, mediaTime() < hands->busyUntil, riders};
+        // (A fist or a knife busies the hand that makes it, not the other: where the input says which hand pinches, only that
+        // hand's own count. WS75: on the headset a left hand resting closed kept every pinch of the right from being taken.)
+        bool busy = pinchHand >= 0 ? hands->busyFor(pinchHand) : mediaTime() < hands->busyUntil;
+        if (!busy && mediaTime() < hands->busyUntil && p->kind == Pick::Kind::guide) {
+            logLine(fmt("[guide] a pinch on a button (%d) with the %s hand, the other busy: taken as a pinch", p->index, pinchHand == 0 ? "left" : "right"));
+        }
+        press = Press{*p, start, busy, riders};
         press->began = time;
         if (p->kind == Pick::Kind::guide) pressButton(entity, p->index);
     }
@@ -111,10 +117,14 @@ void OceanModel::pinchEnded(Vec3 point) {
     releaseButton();
     EntityRef over = releasedOver;
     releasedOver = nullptr;
+    pinchHand = -1;
     if (!press) return;
     Press p = *press;
     press = std::nullopt;
+    bool button = p.pick.kind == Pick::Kind::guide;
     if (p.cancelled) {
+        // (Every pinch on a button says what came of it.)
+        if (button) logLine(fmt("[guide] a pinch on a button (%d) let go: not taken, the hand that made it was busy (a fist, a knife or palms together)", p.pick.index));
         marking = std::nullopt;
         return;
     }
@@ -149,9 +159,26 @@ void OceanModel::pinchEnded(Vec3 point) {
     // A guide button counts a pinch that began on it and lets go with the ray still on it, however far the ray went
     // between: the fingers closing move it, and a pinch that seemed to land and did nothing was taken for a dead button
     // (the lead, WS75). Cards and trees keep to stillness.
-    if (!still && p.pick.kind == Pick::Kind::guide && over) {
+    if (!still && button && over) {
         std::optional<Pick> under = pick(over);
         if (under && under->kind == Pick::Kind::guide && under->index == p.pick.index) still = true;
+    }
+    // ... and where the ray at the release can't be had or trusted (hand tracking loses it as the fingers open), one let
+    // go within about a second with the ray on nothing else that is pinched: on nothing, the backdrop, or the card the
+    // button stands on (the lead, WS75).
+    if (!still && button && time - p.began < buttonQuickly) {
+        std::optional<Pick> under = over ? pick(over) : std::nullopt;
+        if (!under || under->kind == Pick::Kind::background ||
+            (under->kind == Pick::Kind::guide && (under->index == p.pick.index || under->index == guideOffButtons))) {
+            still = true;
+            logLine(fmt("[guide] a pinch on a button (%d) taken: let go within %.1f s, the ray on nothing else", p.pick.index, time - p.began));
+        }
+    }
+    if (button && !still) {
+        std::optional<Pick> under = over ? pick(over) : std::nullopt;
+        bool elsewhere = under && under->kind != Pick::Kind::background && !(under->kind == Pick::Kind::guide && under->index == guideOffButtons);
+        logLine(fmt("[guide] a pinch on a button (%d) let go: not taken, the ray had left it (%.0f cm, %.1f s%s)", p.pick.index, double(std::max(moved, p.reach)) * 100,
+                    time - p.began, elsewhere ? ", on something else" : ""));
     }
     if (still) {
         if (p.pick.kind == Pick::Kind::card) {

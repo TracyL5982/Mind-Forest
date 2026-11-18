@@ -38,6 +38,7 @@ constexpr double layerBeforeAnswerEnds = 2;
 /// tourTalk's lesson while the example cards listen: none of the lessons' own numbers.
 constexpr int exampleTalk = 1000;
 
+// (`offButtons` is OceanModel::guideOffButtons, which pinchEnded reads.)
 enum Act { begin = 100, closeSheet = 101, startOver = 102, openSheet = 103, tour = 104, tourSkip = 105, tourEnd = 106, tourBack = 107, homeClose = 108, tourSay = 109, offButtons = 110 };
 // The gestures a ghost hand teaches, in the order they are needed, and how long each waits once its moment has come.
 struct Plan {
@@ -1967,6 +1968,7 @@ void OceanModel::showSheet(int row) {
 }
 
 void OceanModel::guideAct(int action) {
+    static_assert(Act::offButtons == guideOffButtons, "pinchEnded reads the act for off the buttons as guideOffButtons");
     if (!teach.on) return;
     switch (action) {
     case Act::begin:

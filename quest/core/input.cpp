@@ -258,6 +258,7 @@ void Input::update(const EntityRef& root, const std::optional<Mat4>& head, float
                     heldDistance = h.hit.distance;
                     aimStart = h.pointer.direction;
                     swung = false;
+                    scene->pinchBegan(i);
                     scene->pinchChanged(held, heldStart, heldStart);
                 }
             } else if (holder != i && !magnifying) {
