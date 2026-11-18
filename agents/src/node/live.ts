@@ -4,7 +4,7 @@ import type { Activity, Outbound } from '../core/pipeline.ts';
 import type { Scene, Turn } from '../core/roles/types.ts';
 import type { CardNote, ToolOutput } from '../core/voice-tools.ts';
 import { withoutWakePhrase } from '../core/wake.ts';
-import type { DeviceFrame } from './protocol.ts';
+import type { DeviceFrame, Look } from './protocol.ts';
 
 /**
  * Momo's real-time voice for one device (`/live`): OpenAI's realtime model holds the conversation. After the wake the device's
@@ -48,7 +48,7 @@ export type OpenRealtime = (on: { event: (e: RealtimeEvent) => void; closed: (wh
 export interface Usage {
   input_tokens?: number;
   output_tokens?: number;
-  input_token_details?: { text_tokens?: number; audio_tokens?: number; cached_tokens_details?: { text_tokens?: number; audio_tokens?: number } };
+  input_token_details?: { text_tokens?: number; audio_tokens?: number; image_tokens?: number; cached_tokens_details?: { text_tokens?: number; audio_tokens?: number; image_tokens?: number } };
   output_token_details?: { text_tokens?: number; audio_tokens?: number };
 }
 
@@ -78,6 +78,27 @@ const ANSWER_WAIT_MS = 4000;
  * 0.51 s at the median and 1.49 s at the slowest (403 turns); 2 of 77 calls that started a Scout run came before it, by 50 and 68 ms.
  */
 const SAID_MS = 1500;
+/** How long what the user marked on a picture of the headset's own (the walk's sketch) waits to be shown with their words, ms. */
+const SIGHT_MS = 5 * 60 * 1000;
+
+/**
+ * What the user marked on a picture, as Momo is shown it (WS89): a message of the user's with the part cut out and the whole
+ * picture, the line drawn on each in red, and a line saying what they are. The part is seen in detail, the whole at a glance.
+ */
+export function sightItem(sight: { title: string; crop: string; whole: string }): Record<string, unknown> {
+  return {
+    type: 'message',
+    role: 'user',
+    content: [
+      {
+        type: 'input_text',
+        text: `[What I marked] I drew a line round part of the picture on "${sight.title}". The first image is that part, cut out; the second is the whole picture, my line in red. When I ask about "this", "here" or "that part", I mean what is inside my line.`,
+      },
+      { type: 'input_image', image_url: sight.crop, detail: 'high' },
+      { type: 'input_image', image_url: sight.whole, detail: 'low' },
+    ],
+  };
+}
 /**
  * Calls whose output Momo always speaks from, even after a lead-in of her own: what they give is for the user to hear (a Telegram
  * pairing code among them). The others act, and Momo said what it is doing as it called them.
@@ -96,9 +117,10 @@ export function inDigits(text: string): string {
  * Dollars per million tokens (https://developers.openai.com/api/docs/pricing): the realtime models as read on 2026-11-14, the
  * transcription models as they were listed in 2025 and not read again.
  */
-const PRICES: Record<string, { audioIn: number; audioCached: number; audioOut: number; textIn: number; textCached: number; textOut: number }> = {
-  'gpt-realtime-2.1': { audioIn: 32, audioCached: 0.4, audioOut: 64, textIn: 4, textCached: 0.4, textOut: 24 },
-  'gpt-realtime-2.1-mini': { audioIn: 10, audioCached: 0.3, audioOut: 20, textIn: 0.6, textCached: 0.06, textOut: 2.4 },
+const PRICES: Record<string, { audioIn: number; audioCached: number; audioOut: number; textIn: number; textCached: number; textOut: number; imageIn?: number; imageCached?: number }> = {
+  // Image input as read on 2026-11-18 (WS89): what the user marked, shown to Momo.
+  'gpt-realtime-2.1': { audioIn: 32, audioCached: 0.4, audioOut: 64, textIn: 4, textCached: 0.4, textOut: 24, imageIn: 5, imageCached: 0.5 },
+  'gpt-realtime-2.1-mini': { audioIn: 10, audioCached: 0.3, audioOut: 20, textIn: 0.6, textCached: 0.06, textOut: 2.4, imageIn: 0.8, imageCached: 0.08 },
   'gpt-4o-transcribe': { audioIn: 6, audioCached: 6, audioOut: 0, textIn: 2.5, textCached: 2.5, textOut: 10 },
   'gpt-4o-mini-transcribe': { audioIn: 3, audioCached: 3, audioOut: 0, textIn: 1.25, textCached: 1.25, textOut: 5 },
 };
@@ -112,12 +134,14 @@ export function cost(model: string, usage: Usage): number | null {
   const output = usage.output_token_details;
   const audioCached = cached.audio_tokens ?? 0;
   const textCached = cached.text_tokens ?? 0;
+  const imageCached = cached.image_tokens ?? 0;
   // A transcription reports its output as a total only, and all of it is text.
   const textOut = output ? (output.text_tokens ?? 0) : (usage.output_tokens ?? 0);
   const dollars =
     ((input.audio_tokens ?? 0) - audioCached) * p.audioIn + audioCached * p.audioCached +
     ((input.text_tokens ?? 0) - textCached) * p.textIn + textCached * p.textCached +
-    (output?.audio_tokens ?? 0) * p.audioOut + textOut * p.textOut;
+    (output?.audio_tokens ?? 0) * p.audioOut + textOut * p.textOut +
+    ((input.image_tokens ?? 0) - imageCached) * (p.imageIn ?? p.textIn) + imageCached * (p.imageCached ?? p.textCached);
   return dollars / 1e6;
 }
 
@@ -462,6 +486,12 @@ export class LiveVoice {
   /** Calls waiting on a turn's words, each looking again as a piece is written down or fails. */
   private waiting = new Set<() => void>();
   private scene: Scene = { selection: [] };
+  /**
+   * What the user last marked on a picture (WS89), from the headset's `look`, and whether Momo has been shown it in this session:
+   * a card of the service's (`nodeId`) is shown with the next turn begun on it, the headset's own with the next lesson or turn.
+   * Kept only here, in memory, until the next look or the marks are gone.
+   */
+  private sight: { nodeId?: string; title: string; crop: string; whole: string; at: number; shown: boolean } | null = null;
   /** What Momo was last told of where the user is. */
   private toldWhere: string | null = null;
   /** The turn detection's answer to a turn, expected and not begun. `cancel`: the user spoke again first. */
@@ -541,6 +571,7 @@ export class LiveVoice {
         s.send({ type: 'session.update', session: { type: 'realtime', audio: { input: { transcription: this.transcription(frame.scene) } } } });
         s.send({ type: 'input_audio_buffer.clear' });
         this.tellWhere();
+        this.showSight(frame.scene.focus);
         this.upsampler = new Upsampler();
         this.hearing = { turn: frame.turn, quietest: Number.POSITIVE_INFINITY, spoke: false, quiet: 0 };
         this.words = { turn: frame.turn, text: '' };
@@ -585,6 +616,7 @@ export class LiveVoice {
         this.hearing = null;
         this.answering = { turn: frame.turn, at: this.now() };
         this.note(lessonNote(frame));
+        this.showSight(undefined);
         s.send({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: frame.words }] } });
         this.deps.spoken({ who: 'user', text: frame.words });
         this.deps.log(`[live] lesson, turn ${frame.turn}: ${frame.words}`);
@@ -693,6 +725,28 @@ export class LiveVoice {
    * The device left, or the service cut the session for a limit. Nothing of a turn or an answer is kept, as when the session is lost,
    * so the next session does not cancel its own first answer for one asked of this one.
    */
+  /** The headset's look at what the user marked on a picture (WS89): kept until the next, or until the card's marks are gone. */
+  look(look: Look): void {
+    if (!look.crop || !look.whole) {
+      if (!look.nodeId || this.sight?.nodeId === look.nodeId) this.sight = null;
+      return;
+    }
+    this.sight = { ...(look.nodeId ? { nodeId: look.nodeId } : {}), title: look.title, crop: look.crop, whole: look.whole, at: this.now(), shown: false };
+  }
+
+  /**
+   * Shows Momo what the user marked, once a session, before the words of a turn about it: a card of the service's while it is
+   * the one open (`focus`), and the headset's own picture if it was marked in the last five minutes.
+   */
+  private showSight(focus: string | undefined): void {
+    const s = this.sight;
+    if (!s || s.shown || !this.session) return;
+    if (s.nodeId ? focus !== s.nodeId : this.now() - s.at > SIGHT_MS) return;
+    this.session.send({ type: 'conversation.item.create', item: sightItem(s) });
+    s.shown = true;
+    this.deps.log(`[live] Momo is shown what is marked on ${s.title}`);
+  }
+
   close(): void {
     for (const timer of [this.idle, this.wake, this.expected?.timer, this.runEnded, this.naming?.timer]) if (timer) clearTimeout(timer);
     this.idle = this.wake = this.expected = this.runEnded = this.naming = null;
@@ -718,6 +772,8 @@ export class LiveVoice {
     });
     this.session = session;
     this.toldWhere = null;
+    // A new conversation has seen nothing yet: what is marked is shown again with the next turn about it.
+    if (this.sight) this.sight.shown = false;
     const today = new Date(this.now()).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     session.send({
       type: 'session.update',

@@ -1009,6 +1009,11 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         if (director) director.worn(m.away);
         else gifts?.returned(m.away);
         return;
+      case 'look':
+        // What the user marked on a picture, for Momo to see with their next words about it: kept by this headset's voice
+        // alone, in memory, and never written to the log or the store.
+        voices.get(ws)?.look(m);
+        return;
       case 'share':
         // The demo shares a tree with the user as the friend (the film); the hosted service, through the person's Telegram, with a
         // friend who uses it too, and tells the headset how it went. Any other service shares nothing.

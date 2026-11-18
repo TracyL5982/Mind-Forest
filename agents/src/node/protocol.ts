@@ -18,6 +18,25 @@ const RawDump = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('asset'), asset: z.string(), mime: z.string(), name: z.string().optional(), sound: Sound.optional() }),
 ]);
 
+/** Most characters of one picture a headset shows Momo, as a data URL: a JPEG of 512 px at most is well under it. */
+export const SEEN_CHARS = 300_000;
+const Seen = z.string().max(SEEN_CHARS).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/, 'a JPEG as a data URL');
+/**
+ * What the user marked on a card's picture, for Momo to see (WS89): the part (`box`: x, y, width and height, 0 to 1 of the
+ * picture, y down) as `crop`, and the whole picture as `whole`, each with the user's line drawn on it in red. A card of the
+ * service's is named by `nodeId`; one of the headset's own (the welcome walk's) by its title alone. With no pictures, the
+ * card's marks are gone.
+ */
+export const Look = z.object({
+  t: z.literal('look'),
+  nodeId: Id.optional(),
+  title: z.string().max(200),
+  box: z.tuple([z.number().min(0).max(1), z.number().min(0).max(1), z.number().min(0).max(1), z.number().min(0).max(1)]).optional(),
+  crop: Seen.optional(),
+  whole: Seen.optional(),
+});
+export type Look = z.infer<typeof Look>;
+
 /** Every message a client may send. See docs/protocol.md. */
 export const ClientMessage = z.discriminatedUnion('t', [
   z.object({ t: z.literal('dump'), dumps: z.array(RawDump).min(1).max(50) }),
@@ -34,6 +53,7 @@ export const ClientMessage = z.discriminatedUnion('t', [
   z.object({ t: z.literal('client'), media: z.object({ embeds: z.boolean(), files: z.array(z.string().regex(/^[a-z0-9]{2,5}$/)).max(20) }) }),
   /** The headset was put on again, still joined: how long it was off, in seconds. */
   z.object({ t: z.literal('worn'), away: z.number().nonnegative().finite() }),
+  Look,
   /** Shares a tree with a friend. In the demo (the film) the friend is the user; between two people it is to come. */
   z.object({ t: z.literal('share'), tree: Id }),
   z.object({ t: z.literal('settings'), patch: z.object({

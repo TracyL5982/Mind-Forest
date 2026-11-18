@@ -10,7 +10,7 @@ import type { CardNote } from '../src/core/voice-tools.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { cost, LiveVoice, Narration, Upsampler, type LiveDeps, type RealtimeEvent, type VoiceFrame } from '../src/node/live.ts';
-import { DeviceFrame } from '../src/node/protocol.ts';
+import { ClientMessage, DeviceFrame } from '../src/node/protocol.ts';
 import { startServer } from '../src/node/server.ts';
 import { withoutLinks } from '../src/node/web-answer.ts';
 import { tempDir } from './temp.ts';
@@ -211,6 +211,77 @@ test("a lesson of the welcome walk is answered from the words the device wrote d
   v.heard({ t: 'start', turn: 4, scene: SCENE });
   v.heard({ t: 'end' });
   assert.deepEqual(model.sent('response.create').at(-1)!.response, { metadata: { purpose: 'reply' } });
+});
+
+/** A JPEG as the headset sends one, in a data URL: a few bytes stand for the picture. */
+const jpeg = (name: string) => `data:image/jpeg;base64,${Buffer.from(`jpeg of ${name}`).toString('base64')}`;
+/** What Momo was shown of what the user marked: each message of the user's that holds pictures, as its text and its pictures. */
+const sights = (model: Scripted) =>
+  model.sent('conversation.item.create').flatMap((e) => {
+    const item = e.item as { role?: string; content?: { type: string; text?: string; image_url?: string; detail?: string }[] };
+    const images = item.content?.filter((c) => c.type === 'input_image') ?? [];
+    return item.role === 'user' && images.length > 0 ? [{ text: item.content!.find((c) => c.type === 'input_text')?.text ?? '', images: images.map((c) => [c.image_url, c.detail]) }] : [];
+  });
+
+test("what the user marked on a card is shown to Momo with the next turn begun on that card, once a conversation, and taken back when the marks go", () => {
+  const { v, model } = voice();
+  const look = ClientMessage.parse({ t: 'look', nodeId: 'n1', title: 'Night stairs', box: [0.2, 0.3, 0.4, 0.3], crop: jpeg('the part'), whole: jpeg('the whole') });
+  assert.equal(look.t, 'look');
+  assert.throws(() => ClientMessage.parse({ ...look, crop: 'data:image/png;base64,AAAA' }), 'only a JPEG');
+  assert.throws(() => ClientMessage.parse({ ...look, crop: `data:image/jpeg;base64,${'A'.repeat(300_001)}` }), 'and no larger than the limit');
+  if (look.t !== 'look') return;
+  v.look({ ...look, nodeId: 'n2' });
+  turn(1);
+  assert.deepEqual(sights(model), [], 'a card that is not the one open is not shown');
+
+  v.look(look);
+  turn(2);
+  const shown = sights(model);
+  assert.equal(shown.length, 1, 'with the card open, the next turn shows it');
+  assert.match(shown[0]!.text, /I drew a line round part of the picture on "Night stairs"\. The first image is that part, cut out; the second is the whole picture/);
+  assert.deepEqual(shown[0]!.images, [[jpeg('the part'), 'high'], [jpeg('the whole'), 'low']], 'the part in detail, the whole at a glance');
+  // It is the last thing put in the conversation as the turn begins, so the words heard next come after it.
+  const last = model.sent('conversation.item.create').at(-1)!.item as { role: string; content: { type: string }[] };
+  assert.deepEqual([last.role, last.content.map((c) => c.type)], ['user', ['input_text', 'input_image', 'input_image']]);
+  turn(3);
+  assert.equal(sights(model).length, 1, 'once a conversation');
+
+  // A new conversation has seen nothing: it is shown again while the marks stand.
+  v.close();
+  turn(4);
+  assert.equal(sights(model).length, 1, 'the new session shows it once');
+
+  // The marks gone, nothing is shown.
+  v.close();
+  v.look({ t: 'look', nodeId: 'n1', title: 'Night stairs' });
+  turn(5);
+  assert.equal(sights(model).length, 0, 'none once the marks are gone');
+
+  function turn(n: number) {
+    v.heard({ t: 'start', turn: n, scene: SCENE });
+  }
+});
+
+test("the welcome walk's sketch is shown to Momo before the lesson's words, within five minutes of being sent", () => {
+  const { v, model, clock } = voice();
+  const lesson = { t: 'lesson' as const, turn: 1, words: 'What is she holding?', picture: 'A woman in blue reads a letter by a window.', cards: [] };
+  v.look({ t: 'look', title: 'Woman Reading a Letter', box: [0.4, 0.3, 0.2, 0.3], crop: jpeg('the letter'), whole: jpeg('the painting') });
+  v.heard(lesson);
+  const items = model.sent('conversation.item.create').map((e) => e.item as { role: string; content: { type: string; text?: string }[] });
+  assert.deepEqual(items.map((i) => [i.role, i.content.map((c) => c.type).join(' ')]), [
+    ['system', 'input_text'],
+    ['user', 'input_text input_image input_image'],
+    ['user', 'input_text'],
+  ], 'the lesson, then the sketch, then the words');
+  assert.equal(items[2]!.content[0]!.text, 'What is she holding?');
+  assert.deepEqual(model.sent('response.create').map((e) => e.response), [{ metadata: { purpose: 'reply' }, tool_choice: 'none' }], 'her answer may still call no tool');
+
+  // A sketch sent long before is not the one asked about.
+  v.close();
+  v.look({ t: 'look', title: 'Woman Reading a Letter', box: [0.4, 0.3, 0.2, 0.3], crop: jpeg('the letter'), whole: jpeg('the painting') });
+  clock.now += 5 * 60 * 1000 + 1;
+  v.heard({ ...lesson, turn: 2 });
+  assert.equal(sights(model).length, 0, 'not five minutes after it was sent');
 });
 
 test('a web question: the call runs as soon as the model makes it, its label shows meanwhile, and its answer is spoken after the lead-in', async () => {
@@ -590,9 +661,52 @@ test('a response and a transcription cost what their tokens cost at the listed p
   });
   assert.ok(dollars !== null);
   assert.ok(Math.abs(dollars - (400 * 0.6 + 600 * 0.06 + 40 * 10 + 10 * 2.4 + 60 * 20) / 1e6) < 1e-12);
+  // What the user marked, shown as pictures: image tokens at the image rates.
+  const seen = cost('gpt-realtime-2.1', { input_token_details: { text_tokens: 100, image_tokens: 340, cached_tokens_details: { image_tokens: 300 } } });
+  assert.ok(seen !== null && Math.abs(seen - (100 * 4 + 40 * 5 + 300 * 0.5) / 1e6) < 1e-12);
   const heard = cost('gpt-4o-transcribe', { input_tokens: 48, output_tokens: 15, input_token_details: { text_tokens: 13, audio_tokens: 35 } });
   assert.ok(heard !== null && Math.abs(heard - (13 * 2.5 + 35 * 6 + 15 * 10) / 1e6) < 1e-12);
   assert.equal(cost('some-other-model', {}), null);
+});
+
+test("a headset's look at what the user marked reaches its own voice alone, and nothing of the pictures is written to the log", async () => {
+  const lines: string[] = [];
+  const model = new Scripted();
+  const run = await startServer({
+    port: 0, host: '127.0.0.1', clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret', dataDir: tempDir('mp-look-'),
+    live: { open: model.open, options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' }, hearing: 'gpt-4o-transcribe' } },
+    log: (line) => lines.push(line),
+  });
+  try {
+    const until = async (ok: () => boolean) => {
+      for (let i = 0; i < 400 && !ok(); i++) await new Promise((r) => setTimeout(r, 5));
+    };
+    const connect = async () => {
+      const got: { t: string; connection?: string }[] = [];
+      const ws = new WebSocket(`${run.url.replace('http', 'ws')}/ws?token=secret`);
+      ws.on('message', (raw) => got.push(JSON.parse(String(raw))));
+      await until(() => got.some((m) => m.t === 'hello'));
+      const live = new WebSocket(`${run.url.replace('http', 'ws')}/live?token=secret&connection=${got.find((m) => m.t === 'hello')!.connection}`);
+      await new Promise((open) => live.on('open', open));
+      return { ws, live, got };
+    };
+    const headset = await connect();
+    const other = await connect();
+    headset.ws.send(JSON.stringify({ t: 'look', nodeId: 'n1', title: 'Night stairs', box: [0.2, 0.3, 0.4, 0.3], crop: jpeg('the part'), whole: jpeg('the whole') }));
+    await new Promise((r) => setTimeout(r, 50));
+    other.live.send(JSON.stringify({ t: 'start', turn: 1, scene: SCENE }));
+    await until(() => model.sessions.length === 1);
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(sights(model).length, 0, "another headset's voice is shown nothing of it");
+    headset.live.send(JSON.stringify({ t: 'start', turn: 1, scene: SCENE }));
+    await until(() => model.sessions.length === 2 && sights(model).length > 0);
+    assert.deepEqual(sights(model).map((s) => s.images.length), [2], "its own voice is shown both, with the turn begun on the card");
+    assert.ok(lines.some((l) => l === '[live] Momo is shown what is marked on Night stairs'));
+    assert.ok(!lines.some((l) => l.includes('data:image') || l.includes(Buffer.from('jpeg of').toString('base64'))), 'no picture is written to the log');
+    for (const c of [headset, other]) c.live.close(), c.ws.close();
+  } finally {
+    await run.close();
+  }
 });
 
 test("the service refuses /live without a live voice; with one, what Momo starts is the named connection's own, and Momo walks through its cards", async () => {
