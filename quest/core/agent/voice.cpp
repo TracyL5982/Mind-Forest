@@ -1101,6 +1101,7 @@ void Voice::heardLive(LiveFrame& frame, double now) {
                        if (streaming || !std::holds_alternative<Ready>(link)) return;
                        // GUIDE: the lesson's answer, too late: the walk's own line has been said in its place.
                        if (!lateLesson.empty() && a.id == lateLesson) return;
+                       if (!hushedResults.empty() && a.id == hushedResults) return;
                        if (lesson && !lesson->id.empty() && a.id == lesson->id) {
                            walkReply = a.id;
                            lesson.reset();
@@ -1126,6 +1127,13 @@ void Voice::heardLive(LiveFrame& frame, double now) {
                    },
                    [&](LiveText& t) {
                        if (streaming) return;
+                       // WS103: no tree stands, so what a piece of work brought to one put away is not said.
+                       if (t.results && t.id != hushedResults && away && away()) {
+                           hushedResults = t.id;
+                           logLine("[voice] no tree stands, so what the work brought is not said");
+                           if (live && live->id == t.id) hushLive();
+                       }
+                       if (!hushedResults.empty() && t.id == hushedResults) return;
                        if (lateTurn && t.turn == lateTurn) lateLesson = t.id;
                        if (!lateLesson.empty() && t.id == lateLesson) return;
                        if (lesson && t.turn == lesson->turn && lesson->id.empty()) lesson->id = t.id;

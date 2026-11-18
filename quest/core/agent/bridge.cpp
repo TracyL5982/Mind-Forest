@@ -144,6 +144,7 @@ Bridge::Bridge(OceanModel& model, Address address, std::shared_ptr<Transport> tr
     : model(model), client(std::move(address), std::move(transport)), dump(std::move(dump)), walk(Flags::integer("agentWalk")),
       keyboardTest(Flags::has("keyboardTest")) {
     if (Flags::string("agentVoice").value_or("on") != "off") voice = std::make_unique<Voice>(client, [this] { return scene(); }, Flags::string("wakeClip"), Flags::has("mute"));
+    if (voice) voice->away = [this] { return !model.tree; };
     if (Flags::string("agentType") && Flags::number("agentTypeAt") > 0) typeAt = Flags::number("agentTypeAt");
     if (Flags::number("wornAt") > 0) wornAt = Flags::number("wornAt");
     std::string file = plotsFile();
