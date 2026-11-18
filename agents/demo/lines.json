@@ -42,7 +42,7 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Let's map it out. I built a few interactive cards from Darwin's 1837 branching notebook alongside a 3D biotecture model. Sketch on whichever structure clicks!"
+    "text": "Let’s map it out: I’m bringing Darwin’s 1837 branching tree sketch and a Biotecture tower drawn like a tree. Sketch on whichever structure clicks."
    },
    {
     "id": "wrap",
@@ -61,7 +61,7 @@
      "nolli-rome",
      "llull-figure"
     ],
-    "text": "I’d start with Biotecture, because it’s literally a building that behaves like a tree, roots and all, which makes a lovely bridge between structure and metaphor. Next, we could pick one alternate model, like the ring of Llull’s ring or the branching of Darwin’s notebook, and sketch how ideas move through it in your headset."
+    "text": "I’d start with the Biotecture tower, because it’s already a literal tree-shaped structure meant to grow, which makes it a perfect bridge between your analogy and a spatial design. Then, as a next step, we could compare it with Darwin’s branching sketch to decide whether your brainstorm feels more like a growing trunk or a diverging canopy."
    }
   ],
   "mo": [
@@ -857,7 +857,7 @@
      "data-mountain-1998",
      "space-to-think-2010"
     ],
-    "text": "Eleven more just landed, and my favorite is “Data mountain” because it nails how spatial placement becomes memory, which is perfect for VR brainstorming."
+    "text": "Twelve more just landed, and my favorite is “Data mountain” because it nails how spatial placement becomes memory, which is perfect for VR brainstorming."
    },
    {
     "id": "wrap",
@@ -871,7 +871,7 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Let's map it out. I built a few interactive cards from Darwin's 1837 branching notebook alongside a 3D biotecture model. Sketch on whichever structure clicks!"
+    "text": "Let’s map it out: I’m bringing Darwin’s 1837 branching tree sketch and a Biotecture tower drawn like a tree. Sketch on whichever structure clicks."
    },
    {
     "id": "first",
@@ -879,7 +879,7 @@
     "cards": [
      "t080"
     ],
-    "text": "First up, there’s “A disc of pictures” by Eugene Pylinsky, from your own cards. It’s hundreds of small images packed into a single circle so you see everything at once, with no obvious path to follow through it."
+    "text": "First up is “A disc of pictures” by Eugene Pylinsky. It’s hundreds of small images packed into one circle so you see everything at once, with no path through it."
    },
    {
     "id": "more-1",
@@ -892,18 +892,19 @@
      "t021",
      "llull-figure",
      "darwin-tree",
-     "haeckel-corals",
-     "mendeleev-table",
-     "cordier-canon",
-     "nolli-rome"
+     "haeckel-corals"
     ],
-    "text": "There are eleven more, and my favorite is “Biotecture,” a tower drawn like a tree with roots, a building meant to grow."
+    "text": "Eight more came in, and I’d go for “Biotecture” first—an intriguing tower drawn like a tree, roots and all."
    },
    {
     "id": "wrap",
     "kind": "wrap",
-    "cards": [],
-    "text": "I’d start with “Biotecture” because it frames the tree analogy as something that actually grows over time, which fits your layered poster idea. If you want, we can go deeper on that one’s angle—growth, structure, or how people move through it."
+    "cards": [
+     "mendeleev-table",
+     "cordier-canon",
+     "nolli-rome"
+    ],
+    "text": "I’d open “Biotecture” first because the tree-like tower feels like a perfect bridge between organic branching and a built structure that could “grow” with your ideas. Next, we could open it and see what kind of brainstorming paths it suggests, or pull in a contrasting model, like the periodic table’s held-open gaps, as a different analogy."
    }
   ],
   "mo": [
@@ -1080,7 +1081,7 @@
     "cards": [
      "sketch-blend"
     ],
-    "text": "I’d look at “Layers blending” first, because it gives you a clean rule for how old layers collapse into a single plane. Want to pick one of these and sketch a tiny rule for how it behaves in your poster series?"
+    "text": "I’d look at “Layers blending” first, because it gives you a clean rule for how old layers collapse into a single plane. Want to pick one of these and sketch a tiny rule for how it behaves in your wood film?"
    }
   ],
   "f5": [
