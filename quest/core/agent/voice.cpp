@@ -245,27 +245,32 @@ Voice::Hearing Voice::hearing() const {
     return ears->live ? Hearing::ready : Hearing::starting;
 }
 
-const Voice::Recorded* Voice::recording(const std::string& name) {
-    if (!recordingsRead) {
-        recordingsRead = true;
+std::optional<RecordedLine> recordedLine(const std::string& name) {
+    static std::mutex lock;
+    static std::map<std::string, RecordedLine> lines;
+    static bool read = false;
+    std::lock_guard<std::mutex> g(lock);
+    if (!read) {
+        read = true;
         std::string manifest = platform::resourcePath("voice/manifest.json");
         std::optional<std::string> text = manifest.empty() ? std::nullopt : platform::readFile(manifest);
         std::optional<Json> j = text ? Json::parse(*text) : std::nullopt;
         if (!j) logLine("[voice] the walk's recorded lines are not here (voice/manifest.json)");
         for (const Json& line : j ? (*j)["lines"].array() : std::vector<Json>{}) {
             std::string path = platform::resourcePath("voice/" + line["file"].string(""));
-            if (!path.empty()) recordings[line["name"].string("")] = Recorded{path, line["text"].string(""), line["seconds"].number(0)};
+            if (!path.empty()) lines[line["name"].string("")] = RecordedLine{path, line["text"].string(""), line["seconds"].number(0)};
         }
     }
-    auto found = recordings.find(name);
-    return found == recordings.end() ? nullptr : &found->second;
+    auto found = lines.find(name);
+    if (found == lines.end()) return std::nullopt;
+    return found->second;
 }
 
-bool Voice::tellRecorded(const std::string& name) {
-    const Recorded* r = recording(name);
+std::optional<double> Voice::tellRecorded(const std::string& name) {
+    std::optional<RecordedLine> r = recordedLine(name);
     if (!r) {
         logLine("[voice] the walk has no recorded line " + name);
-        return false;
+        return std::nullopt;
     }
     pendingRecorded = *r;
     pending.reset();
@@ -274,10 +279,10 @@ bool Voice::tellRecorded(const std::string& name) {
         playRecorded(*r);
         pendingRecorded.reset();
     }
-    return true;
+    return r->seconds;
 }
 
-void Voice::playRecorded(const Recorded& r) {
+void Voice::playRecorded(const RecordedLine& r) {
     if (sound) sound->stop();
     sound.reset();
     int number = ++reply;

@@ -492,7 +492,13 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
     tree, the walk ends, and the greeting follows.
     What Momo says in them (WS78): to "what can you do", her own answer, recorded in her realtime voice and
     carried in the app (`media-src/quest/voice/`, its words and lengths in `manifest.json`; `Voice::tellRecorded`),
-    said as a reply of hers is and shown as she says it, with the service or without it. To the sketch, the live
+    said as a reply of hers is and shown as she says it, with the service or without it (with no service joined,
+    her voice alone). Its layer of example cards comes 2 s before her answer ends. Once she is done, and for as long
+    as that layer is in front, her ears stay the walk's: one of the cards asked for (loosely, the fullest match
+    winning; "what can you do" again is her answer again) gets her recorded reply to it, saying what she would do
+    and to ask once the walk is done, with the walk's ring round the card while she says it; anything else gets
+    her one reply to anything else. Taking card 6 ends it. `quest/desktop/test/walk_voice_check.sh` scripts it
+    (`-guideSay`, `-guideSayAgain`). To the sketch, the live
     Momo herself: the walk sends what was said, the picture and the layer's cards on /live (the `lesson` frame,
     agents/docs/protocol.md), and she answers and walks through them; where /live is not open, the service says
     `quiet`, or she has made no sound 4 s after, her recorded "Here is a layer from your sketch." instead

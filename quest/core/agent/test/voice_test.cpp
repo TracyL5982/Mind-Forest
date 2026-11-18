@@ -1105,7 +1105,7 @@ TEST(theWalksRecordedLineIsSaidAsHerReplyItsWordsAsSheSaysThem) {
     Talking t(false);       // (whether the service speaks has nothing to do with it: the line is the app's own)
     t.frame();
     size_t plays = host.plays.size();
-    CHECK(t.voice.tellRecorded("momo-can"), "the line is there");
+    CHECK(t.voice.tellRecorded("momo-can") == 4.0, "the line is there, 4 s long");
     t.frame(0.05);
     CHECK_EQ(host.plays.size(), plays + 1);
     if (host.plays.size() <= plays) return;

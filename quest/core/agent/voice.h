@@ -35,6 +35,14 @@
 
 namespace agent {
 
+/// GUIDE: one of the app's lines recorded in Momo's voice (media `voice/<file>`), as `voice/manifest.json` lists it: where
+/// it is, its words exactly as said, and how long it is. Read once; nothing when the app does not carry it.
+struct RecordedLine {
+    std::string path, text;
+    double seconds = 0;
+};
+std::optional<RecordedLine> recordedLine(const std::string& name);
+
 class Voice {
 public:
     /// `scene` says where the user is when they speak. `clip` feeds a recording instead of the microphone. `muted`
@@ -95,10 +103,10 @@ public:
     /// Whether it can hear, and if not why: for the walk to say so.
     enum class Hearing { ready, starting, asking, refused, off };
     Hearing hearing() const;
-    /// GUIDE: a line of the walk's own, recorded in Momo's voice and carried in the app (`voice/<name>.wav`, its words and
-    /// length in `voice/manifest.json`): spoken as a reply of hers is, with or without the service, its words shown as
-    /// she says them. False when there is no such line.
-    bool tellRecorded(const std::string& name);
+    /// GUIDE: a line of the walk's own, recorded in Momo's voice and carried in the app (`recordedLine`): spoken as a reply
+    /// of hers is, with or without the service, its words shown as she says them. How long it is, s; nothing when there
+    /// is no such line.
+    std::optional<double> tellRecorded(const std::string& name);
     /// GUIDE: the sketch lesson's words, put to the live Momo with what the lesson shows (agents/docs/protocol.md, the
     /// `lesson` frame). She answers as she answers anything. Where she can't be reached, says nothing for the turn
     /// (`quiet`), or has made no sound `lessonWait` s after, the recorded line `fallback` is said instead.
@@ -227,14 +235,7 @@ private:
     int reply = 0;                  // the reply playing or on its way; earlier ones are let go
     platform::SoundRef sound;
     std::string spoken;
-    /// GUIDE: the app's recorded lines, as voice/manifest.json has them, read the first time one is said.
-    struct Recorded {
-        std::string path, text;
-        double seconds = 0;
-    };
-    std::map<std::string, Recorded> recordings;
-    bool recordingsRead = false;
-    std::optional<Recorded> pendingRecorded;    // one waiting for the listener's leave to play
+    std::optional<RecordedLine> pendingRecorded;    // a recorded line waiting for the listener's leave to play
     double soundFrom = 0, soundSeconds = 0;     // a recorded line playing: since when, and how long it is
     /// GUIDE: the sketch lesson put to the live Momo: its turn, when, what to say if she doesn't, and her reply's id
     /// once its words come.
@@ -246,8 +247,7 @@ private:
     std::optional<Lesson> lesson;
     std::string lateLesson;         // a lesson's reply that came too late to be heard: its id, and its turn
     int lateTurn = 0;
-    const Recorded* recording(const std::string& name);
-    void playRecorded(const Recorded& r);
+    void playRecorded(const RecordedLine& r);
 
     /// /live: shut until a retry while the last hello offered it, connecting, or ready.
     struct Shut {

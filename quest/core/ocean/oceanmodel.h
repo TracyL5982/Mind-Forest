@@ -620,6 +620,10 @@ private:
         int talkMisses = 0;                 // turns that were nothing, or something else
         std::string talkNote;               // what is said about the last turn
         std::vector<std::pair<bool, std::string>> talkHeard;    // from Momo's ears: the name alone (true), or the words after it
+        double layerAt = 0;                 // when the layer Momo's answer brings is due (WS78: as her recorded answer ends)
+        double answerEnds = 0;              // when her recorded answer to "what can you do" ends
+        int askedCard = -1;                 // the example card last asked for on its layer, ringed until `askedUntil`
+        double askedUntil = 0;
         bool tourSent = false;              // the marked part was sent to Momo: what to say about it is waited for
         std::string tourMarkLinks;          // what the card Momo answers a sketch with points to (`tourMarkNote`)
         int tourMarkWork = -1;              // the picture the sketch lesson marks (a work), and the pictures its layer brings
@@ -673,6 +677,12 @@ private:
     void tourTalk(int lesson, bool wanted, double now, std::optional<Vec3> at);
     void tourTalkPanel(const std::string& words, bool pill, std::optional<Vec3> at);
     void tourAnswer(int lesson, const std::string& words);
+    /// WS78: what is said while the example cards of what Momo can do are in front, answered by her recorded reply.
+    void tourExample(const std::string& said, double now);
+    /// A line of Momo's recorded ones said: by her voice where she has one, otherwise its sound alone. How long it is, s;
+    /// 0 when it can't be said.
+    double sayRecorded(const std::string& name);
+    platform::SoundRef walkSound;       // (the sound alone, kept while it plays)
     void tourSend();
     void tourMarkNote(const std::string& words);
     std::string tourLine() const;

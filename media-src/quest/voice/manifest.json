@@ -4,16 +4,9 @@
   {
    "name": "momo-can",
    "file": "momo-can.wav",
-   "seconds": 14.7,
-   "text": "Hey! I'm your companion in your Mind Palace. I can help you think through ideas, answer questions, pull in new references like images or examples, and help you organize or save notes as you go. And now, here are some example requests you can try.",
-   "when": "The answer to \"Hi Momo, what can you do for me?\" in the Momo lesson, before the example cards come up (the user's words, saying \"Mind Palace\")."
-  },
-  {
-   "name": "momo-can-forest",
-   "file": "momo-can-forest.wav",
-   "seconds": 15.5,
-   "text": "Hey! I'm your companion in your Mind Forest. I can help you think through ideas, answer questions, pull in new references like images or examples, and help you organize or save notes as you go. And now, here are some example requests you can try.",
-   "when": "The same answer saying \"Mind Forest\", in case the app's shown name is used. Use one of the two."
+   "seconds": 16.4,
+   "text": "Hey! I'm your AI thinking partner in your Mind Forest. I can help you think through ideas, answer questions, pull in new references like images or examples, and help you organize or save notes as you go. And now, here are some example requests you can try.",
+   "when": "The answer to \"Hi Momo, what can you do for me?\" in the Momo lesson, before the example cards come up (the user's words)."
   },
   {
    "name": "momo-can-tree",
