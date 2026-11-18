@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
+import type { Item } from '../core/domain.ts';
 import { ScriptCard } from './script.ts';
 
 /**
@@ -50,6 +51,21 @@ export const ShowTree = z
     }
   });
 export type ShowTree = z.infer<typeof ShowTree>;
+
+/**
+ * A card as every judge's space shows it (`scripts/starter.ts`). The showcase trees' pins are the user's own, and in the demo they
+ * read so: "Pinterest, your Graph board". In the starter every judge begins with they are no judge's, so they read as Pinterest pins
+ * (the user's call, 2026-11-18): the source "Pinterest", the credit "Pinterest pin", and the line under the card's words the same.
+ */
+export function forJudges(item: Item): Item {
+  const from = typeof item.data.from === 'string' ? item.data.from : '';
+  const credit = (item.data.credit as { text?: string } | undefined)?.text ?? '';
+  const yours = /^Pinterest, your\b/i.test(from) || /^Your pin\b/i.test(credit);
+  if (!yours) return item;
+  const lines = item.text.split('\n').map((line) => (line && (line === from || line === credit) ? 'Pinterest pin' : line));
+  const text = lines.filter((line, n) => line !== 'Pinterest pin' || lines.indexOf(line) === n).join('\n');
+  return { ...item, text, data: { ...item.data, from: 'Pinterest', credit: { text: 'Pinterest pin', ...(item.source.url ? { url: item.source.url } : {}) } } };
+}
 
 export interface Showcase {
   tree: ShowTree;

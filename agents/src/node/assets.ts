@@ -37,6 +37,8 @@ interface Meta {
   from?: string;
   /** Kept by the service itself (`put`): a picture it fetched, made or copied in, not an upload. */
   made?: true;
+  /** Came with the starter trees every new space begins with (`scripts/starter.ts`): not the device's own, so never counted against it. */
+  starter?: true;
 }
 
 /** The headset's films, played from the repository. The only folder a linked file may be in. */
@@ -156,7 +158,8 @@ export class DiskAssets implements Assets {
     let bytes = 0;
     for (const name of readdirSync(this.dir)) {
       const id = name.endsWith('.json') ? name.slice(0, -'.json'.length) : '';
-      if (!this.read(id)?.made) continue;
+      const meta = this.read(id);
+      if (!meta?.made || meta.starter) continue;
       try {
         bytes += statSync(join(this.dir, id)).size;
       } catch {

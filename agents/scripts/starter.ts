@@ -4,12 +4,13 @@
  * tree, nothing unplaced, no history, no token and no Telegram pairing. The source is only read, through a copy.
  * Usage: npm run starter -- --from <data folder> [--trees 3] [--tree <id> ...] [--out starter] [--list]
  */
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { inLibrary, type ChangeSet, type Patch } from '../src/core/domain.ts';
 import { Mindstorm } from '../src/core/state.ts';
+import { forJudges } from '../src/demo/showcase.ts';
 import { SqliteStore } from '../src/node/store.ts';
 
 const { values } = parseArgs({
@@ -47,7 +48,8 @@ try {
   const treeIds = new Set(chosen.map((r) => r.tree.id));
   const nodes = [...mind.nodes.values()].filter((n) => treeIds.has(n.treeId));
   const nodeIds = new Set(nodes.map((n) => n.id));
-  const items = [...mind.items.values()].filter((i) => inLibrary(i) || nodes.some((n) => n.itemId === i.id));
+  // The pins read as every judge's, not as the user's own (`forJudges`).
+  const items = [...mind.items.values()].filter((i) => inLibrary(i) || nodes.some((n) => n.itemId === i.id)).map(forJudges);
   const links = [...mind.links.values()].filter((l) => nodeIds.has(l.a) && nodeIds.has(l.b));
   const groups = [...mind.groups.values()].filter((g) => treeIds.has(g.treeId));
   const created = <E extends Patch['entity']>(entity: E, list: { id: string }[]) => list.map((after) => ({ entity, id: after.id, before: null, after }) as Patch);
@@ -86,7 +88,9 @@ try {
     for (const name of [id, `${id}.json`]) {
       const file = join(from, 'assets', name);
       if (!existsSync(file)) continue;
-      copyFileSync(file, join(out, 'assets', name));
+      // Each file is marked as the starter's, so it counts toward no space's limit on what the service keeps (`DiskAssets`).
+      if (name.endsWith('.json')) writeFileSync(join(out, 'assets', name), JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), starter: true }));
+      else copyFileSync(file, join(out, 'assets', name));
       bytes += statSync(file).size;
       files++;
     }

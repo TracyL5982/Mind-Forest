@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { createServer, type IncomingMessage } from 'node:http';
@@ -24,6 +25,8 @@ import { SqliteStore } from '../src/node/store.ts';
 import { EDIT_BYTES, storedBytes, type Command } from '../src/core/domain.ts';
 import { followingIn, InstagramLibrary, openInstagram, parseList } from '../src/node/instagram.ts';
 import { tempDir } from './temp.ts';
+import { DemoScript } from '../src/demo/script.ts';
+import { loadShowcase } from '../src/demo/showcase.ts';
 
 interface Msg {
   t: string;
@@ -958,6 +961,68 @@ test("the files the service keeps for a device count toward a limit of their own
     assert.equal(upload.status, 200, 'an upload is not one of the files the service keeps');
     await ask('lighthouse');
     assert.deepEqual(kept, ['kept harbour', "refused lighthouse: no room to keep lighthouse.jpg: this headset's files come to 1 MB at most"]);
+  } finally {
+    ws?.close();
+    await hosted.close();
+  }
+});
+
+/**
+ * The starter trees built as for the judging service: a demo data folder with one showcase tree, whose pin is the user's own and
+ * whose picture is `picture` bytes, made into a starter by `scripts/starter.ts`.
+ */
+async function starterFromShowcase(picture: number): Promise<string> {
+  const show = tempDir('mp-show-');
+  mkdirSync(join(show, 'mini', 'media'), { recursive: true });
+  writeFileSync(join(show, 'mini', 'media', 'cone.jpg'), new Uint8Array(picture));
+  writeFileSync(join(show, 'mini', 'tree.json'), JSON.stringify({
+    version: 1, id: 'mini', title: 'Seed spirals', topic: 'Why do seeds grow in spirals?',
+    cards: [{ id: 'cone', parent: 'root', kind: 'picture', origin: 'ocean', title: 'Pine cone from above', text: 'The scales run in two sets of spirals.', from: 'Pinterest, your Seed board', href: 'https://www.pinterest.com/pin/1/', image: 'cone.jpg', w: 640, h: 640 }],
+  }));
+  const data = tempDir('mp-demo-data-');
+  const media = tempDir('mp-demo-media-');
+  const script = DemoScript.parse({ version: 1, title: 'Walkthrough', topic: 'A walkthrough', phases: [{ id: 'r1', title: 'Round 1', parent: null, head: 'root', cards: [] }] });
+  const run = await startServer({ port: 0, host: '127.0.0.1', dataDir: data, clientDir: '', model: new FakeModel(), roles: fakeRoles, token: 'x', demo: { script, mediaDir: media, showcase: loadShowcase(show).trees } });
+  await run.close();
+  const out = join(tempDir('mp-starter-out-'), 'starter');
+  execFileSync(process.execPath, ['--no-warnings', '--import', 'tsx', 'scripts/starter.ts', '--from', data, '--trees', '1', '--out', out], { cwd: join(import.meta.dirname, '..'), stdio: 'pipe' });
+  return out;
+}
+
+test("the starter trees' pictures count toward no headset's limit, and their pins read as Pinterest pins, not as the judge's own", { timeout: 60000 }, async () => {
+  const kept: string[] = [];
+  const roles: Roles = {
+    ...fakeRoles,
+    async scout(ctx, { need }) {
+      await ctx.assets.put(new Uint8Array(600_000), 'image/jpeg', `${need}.jpg`).then(
+        () => kept.push(`kept ${need}`),
+        (err: Error) => kept.push(`refused ${need}: ${err.message}`),
+      );
+      return [];
+    },
+  };
+  // A starter picture of 0.9 MB, in a space that may keep 1 MB: had it counted, no picture of the judge's would fit.
+  const starter = await starterFromShowcase(900_000);
+  const metas = readdirSync(join(starter, 'assets')).filter((name) => name.endsWith('.json')).map((name) => JSON.parse(readFileSync(join(starter, 'assets', name), 'utf8')) as { made?: boolean; starter?: boolean });
+  assert.ok(metas.length > 0 && metas.every((meta) => meta.made && meta.starter), `the starter marks each of its files: ${JSON.stringify(metas)}`);
+  const { hosted } = await host({}, { starter, shared: { clientDir: '', model: new FakeModel(), roles }, madeLimit: 1_000_000 });
+  let ws: WebSocket | undefined;
+  try {
+    const c = await connect(hosted, `${KEY}.${A}`);
+    ws = c.ws;
+    const hello = await c.until((m) => m.t === 'hello');
+    const items = (hello.snapshot as { items: { title: string; text: string; data: Record<string, unknown> }[] }).items;
+    const pin = items.find((item) => item.title === 'Pine cone from above')!;
+    assert.deepEqual([pin.data.from, (pin.data.credit as { text: string }).text], ['Pinterest', 'Pinterest pin']);
+    assert.ok(!/your/i.test(pin.text) && pin.text.endsWith('\n\nPinterest pin'), pin.text);
+    const root = treesOf(hello)[0]!.rootId;
+    const ask = async (need: string) => {
+      c.ws.send(JSON.stringify({ t: 'ask', nodeId: root, need }));
+      await holds(() => kept.some((line) => line.includes(` ${need}`)));
+    };
+    await ask('harbour');
+    await ask('lighthouse');
+    assert.deepEqual(kept, ['kept harbour', "refused lighthouse: no room to keep lighthouse.jpg: this headset's files come to 1 MB at most"], "the judge's own pictures have the whole limit");
   } finally {
     ws?.close();
     await hosted.close();

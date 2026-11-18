@@ -4,7 +4,10 @@ Four agents wrote the showcase trees on 2026-11-16, one each. Every paper's titl
 
 ## Constellations
 
-- `lombardi-circle` (a pin): credited to Mark Lombardi on the strength of Pinterest's title alone; the card says so.
+- `otlet-cycle` (2026-11-18) is in place of `lombardi-circle`, a pin with the maker's marks in the picture. It is Paul Otlet's *Le cycle fondamental de la documentation* (1920), held by the Mundaneum, Mons. The licence is public domain, as its Commons record says: https://commons.wikimedia.org/wiki/File:Le_cycle_fondamental_de_la_documentation.jpg
+  - Commons names the Mundaneum as its author. The sheet's own caption gives its source as Otlet's *Traité de documentation*, so the card names Otlet.
+  - The picture is cropped to the drawing. That leaves out the numbered key below it, the sheet's plate number and a pasted label; a tear in the paper still shows white at the right of the ring.
+  - `watts-strogatz-1998` under it now reads the ring as the small-world model's starting ring.
 - `euler-bridges`: the date 1736 comes from the Commons record of another figure of the same paper.
 - `bayer-orion`: dated 1661 as its Commons page says; the atlas is usually dated 1603, so this is probably a later printing.
 - `dunhuang-chart`: the photographer's scale bar was cropped off; the holder is given as Wikimedia Commons, with credit to the International Dunhuang Project.
@@ -19,8 +22,9 @@ Four agents wrote the showcase trees on 2026-11-16, one each. Every paper's titl
 - `golden-angle`: the 137.5 degrees comes from Wikipedia's article, not from the picture's own page.
 - `douady-couder-1992`: the card follows the abstract as OpenAlex gives it.
 - `blossfeldt-fern`: dated only by the 1935 annual it was printed in.
-- `sand-patterns` (a pin): it carries a faint stock-library watermark, and "sand on a ringing plate" is a reading of the picture.
-- `chladni-figures`: a modern redrawing of Chladni's figures, listed as public domain.
+- `chladni-plates` (2026-11-18) is in place of `sand-patterns`, a pin with a stock-library watermark. It is a photograph of four Chladni plates on a stand: Matemateca, IME-USP; exhibit by Estes Objethos Atelier, photograph by Rodrigo Tetsuo Argenton, 2016. The licence is CC BY-SA 4.0: https://commons.wikimedia.org/wiki/File:Chladni_plate_10.jpg
+  - The bottom 55 px were cropped off, taking a small exhibit plaque at the foot of the stand.
+- `chladni-figures`: a modern redrawing of Chladni's figures, listed as public domain. It now points at the plates above it, not at the pin.
 - `spiral-aloe`, `six-spirals`, `curled-leaf` (pins): under 300 px wide, the largest Pinterest serves.
 
 ## Imaginary planet
@@ -29,7 +33,11 @@ Four agents wrote the showcase trees on 2026-11-16, one each. Every paper's titl
 - `bierstadt-vesuvius`: "a moon of volcanoes", said of Io, comes from another NASA record than the picture's own.
 - `nasmyth-lunar-crater`: the record gives only title, maker, 1874 and woodburytype; the book's edge and colour bar were cropped off.
 - `morghen-pumpkin-houses`, `morghen-moon-carriage`, `loewy-puiseux-moon`: titles shortened to fit a card; the museum lists the two Morghen prints as "possibly after" Hoüel, and the cards name Morghen only.
-- `orange-canyon`, `blue-giants`, `lily-pads-from-below` (pins): a maker's name or stamp is printed in the picture; the cards name nobody.
+- On 2026-11-18 three pins with a maker's name or stamp printed in the picture were replaced:
+  - `rawlings-noctis` is in place of `orange-canyon`. It is Pat Rawlings's artist's concept for NASA of the first explorers above Noctis Labyrinthus, January 1989 (NASA S89-25053). The licence is public domain, as a NASA work: https://commons.wikimedia.org/wiki/File:S90_47890.jpg
+  - `goya-colossus` is in place of `blue-giants`. It is *The Colossus* (*El coloso*), after 1808, attributed to Francisco Goya, in the Museo del Prado, Madrid. The licence is public domain: https://commons.wikimedia.org/wiki/File:El_coloso.jpg
+    - Its Commons record gives it as attributed to Goya, and the card says the same: "Attributed to Francisco Goya".
+  - `gunnera-from-below` is in place of `lily-pads-from-below`. It is a Gunnera manicata leaf seen from beneath in the Flora Köln gardens, photographed by Uwe Aranas (CEphoto) on 2014-04-23. The licence is CC BY-SA 3.0: https://commons.wikimedia.org/wiki/File:Cologne_Germany_Flora-K%C3%B6ln-Gunnera-manicata-04.jpg
 
 ## Paper architecture
 
