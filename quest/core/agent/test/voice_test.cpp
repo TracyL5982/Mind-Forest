@@ -3,6 +3,8 @@
 #include "sound.h"
 
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 
 #include "../../async.h"
 #include "../../audio.h"
@@ -268,7 +270,15 @@ double seconds(const std::string& name) { return name == "momo_chime" ? 0.28 : 0
 
 namespace platform {
 
-std::string resourcePath(const std::string& name) { return name == "kws/tokens.txt" ? (check::model / "tokens.txt").string() : ""; }
+std::string resourcePath(const std::string& name) {
+    if (name == "kws/tokens.txt") return (check::model / "tokens.txt").string();
+    // The walk's recorded lines: as a test lays them out in its data folder (`layRecordings`).
+    if (name.rfind("voice/", 0) == 0) {
+        std::string path = dataDir() + "/" + name;
+        return std::filesystem::exists(path) ? path : "";
+    }
+    return "";
+}
 std::optional<std::string> readFile(const std::string& path) {
     std::string s = check::bytesOf(path);
     if (s.empty()) return std::nullopt;
@@ -1070,6 +1080,110 @@ TEST(aRecordedLinesWordsShowByHowFarIntoItHerVoiceIsALittleAhead) {
         std::string shown = playRecordedLine(t, "d2", said, 4000, 2000, 0.5);
         double wanted = charactersOf(said, (2.5 + Voice::wordsAhead) / 4);
         CHECK(double(shown.size()) <= wanted && double(shown.size()) > wanted - 14, "from 2 s in: %zu for %.0f", shown.size(), wanted);
+    }
+}
+
+namespace {
+
+/// The walk's recorded lines, as the app carries them: voice/manifest.json, and a file for each.
+void layRecordings() {
+    std::filesystem::create_directories(dataDir() + "/voice");
+    std::ofstream(dataDir() + "/voice/manifest.json")
+        << R"({"format": "WAV", "lines": [)"
+        << R"({"name": "momo-can", "file": "momo-can.wav", "seconds": 4, "text": "one two three four five six seven eight nine ten"},)"
+        << R"({"name": "momo-sketch", "file": "momo-sketch.wav", "seconds": 2.2, "text": "Here is a layer from your sketch."}]})";
+    std::ofstream(dataDir() + "/voice/momo-can.wav") << "RIFF";
+    std::ofstream(dataDir() + "/voice/momo-sketch.wav") << "RIFF";
+}
+
+const std::string tenWords = "one two three four five six seven eight nine ten";
+
+}  // namespace
+
+TEST(theWalksRecordedLineIsSaidAsHerReplyItsWordsAsSheSaysThem) {
+    layRecordings();
+    Talking t(false);       // (whether the service speaks has nothing to do with it: the line is the app's own)
+    t.frame();
+    size_t plays = host.plays.size();
+    CHECK(t.voice.tellRecorded("momo-can") == 4.0, "the line is there, 4 s long");
+    t.frame(0.05);
+    CHECK_EQ(host.plays.size(), plays + 1);
+    if (host.plays.size() <= plays) return;
+    CHECK(host.plays.back().path == dataDir() + "/voice/momo-can.wav", "its own file, played as a reply is: %s", host.plays.back().path.c_str());
+    CHECK(t.shows() == Presence::State::responding, "Momo speaks");
+    t.frame(1);
+    std::string shown = t.voice.presence().momoText;
+    double wanted = (1.05 + Voice::wordsAhead) / 4 * double(tenWords.size());
+    CHECK(tenWords.compare(0, shown.size(), shown) == 0 && double(shown.size()) <= wanted && double(shown.size()) > wanted - 7,
+          "its words a little ahead of her voice: \"%s\"", shown.c_str());
+    t.frame(3.5);
+    CHECK_EQ(t.voice.presence().momoText, tenWords);
+    host.plays.back().done(true);
+    t.frame();
+    CHECK(t.shows() != Presence::State::responding, "and she is done");
+    CHECK(!t.voice.tellRecorded("momo-nothing"), "a line the app does not carry is not said");
+}
+
+TEST(theSketchLessonGoesToTheLiveMomoWhoAnswersAsAnyReply) {
+    layRecordings();
+    Talking t(true);
+    t.goLive();
+    size_t plays = host.plays.size();
+    t.voice.askLesson({"what is she holding?", "Painting: A Woman Reading", {{"A Letter", "Vermeer, 1663"}}}, "momo-sketch");
+    std::vector<Json> sent = t.liveSent("lesson");
+    CHECK_EQ(sent.size(), size_t(1));
+    if (sent.empty()) return;
+    int turn = sent[0]["turn"].integer(0);
+    CHECK(turn > 0 && sent[0]["words"].string("") == "what is she holding?" && sent[0]["cards"][0]["title"].string("") == "A Letter",
+          "the frame: turn %d, the words, the picture, the cards", turn);
+    t.frame(1);
+    // An answer to something else comes first: not hers.
+    t.serviceSays(R"({"t":"text","id":"x1","text":"Two more pictures came in.","kind":"results"})");
+    t.serviceSays(Json::object().set("t", "text").set("id", "l1").set("turn", turn).set("text", "She is holding a letter.").set("kind", "reply").dump());
+    t.serviceSays(audioFrame("l1", aSecondOfVoice()));
+    t.frame(Voice::lessonWait);
+    CHECK_EQ(host.plays.size(), plays);
+    CHECK(t.shows() == Presence::State::responding, "she answers, and the walk's own line is not said");
+}
+
+TEST(theSketchLessonsOwnLineIsSaidWhenTheLiveMomoCannotAnswer) {
+    layRecordings();
+    {
+        // No live voice: at once.
+        Talking t(true);
+        t.frame();
+        size_t plays = host.plays.size();
+        t.voice.askLesson({"what is she holding?", "a picture", {}}, "momo-sketch");
+        t.frame(0.05);
+        CHECK(host.plays.size() == plays + 1 && host.plays.back().path.find("momo-sketch") != std::string::npos, "the recorded line, at once");
+        CHECK(t.liveSent("lesson").empty(), "nothing sent");
+    }
+    {
+        // `quiet` for the turn: at once.
+        Talking t(true);
+        t.goLive();
+        size_t plays = host.plays.size();
+        t.voice.askLesson({"what is she holding?", "a picture", {}}, "momo-sketch");
+        int turn = t.liveSent("lesson").empty() ? 0 : t.liveSent("lesson")[0]["turn"].integer(0);
+        t.serviceSays(Json::object().set("t", "quiet").set("turn", turn).dump());
+        t.frame(0.05);
+        CHECK(host.plays.size() == plays + 1 && host.plays.back().path.find("momo-sketch") != std::string::npos, "the recorded line on quiet");
+    }
+    {
+        // Her words, but no sound within the wait: the recorded line, and her answer when it comes is not heard.
+        Talking t(true);
+        t.goLive();
+        size_t plays = host.plays.size(), players = host.players.size();
+        t.voice.askLesson({"what is she holding?", "a picture", {}}, "momo-sketch");
+        int turn = t.liveSent("lesson").empty() ? 0 : t.liveSent("lesson")[0]["turn"].integer(0);
+        t.serviceSays(Json::object().set("t", "text").set("id", "l2").set("turn", turn).set("text", "She is holding…").set("kind", "reply").dump());
+        t.frame(Voice::lessonWait - 0.5);
+        CHECK_EQ(host.plays.size(), plays);
+        t.frame(0.6);
+        t.frame(0.05);
+        CHECK(host.plays.size() == plays + 1 && host.plays.back().path.find("momo-sketch") != std::string::npos, "the recorded line after %.0f s", Voice::lessonWait);
+        t.serviceSays(audioFrame("l2", aSecondOfVoice()));
+        CHECK_EQ(host.players.size(), players);
     }
 }
 

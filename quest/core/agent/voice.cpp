@@ -245,14 +245,95 @@ Voice::Hearing Voice::hearing() const {
     return ears->live ? Hearing::ready : Hearing::starting;
 }
 
-void Voice::tell(const std::string& text) {
-    if (!serviceSpeaks || muted) return;
-    pending = text;
+std::optional<RecordedLine> recordedLine(const std::string& name) {
+    static std::mutex lock;
+    static std::map<std::string, RecordedLine> lines;
+    static bool read = false;
+    std::lock_guard<std::mutex> g(lock);
+    if (!read) {
+        read = true;
+        std::string manifest = platform::resourcePath("voice/manifest.json");
+        std::optional<std::string> text = manifest.empty() ? std::nullopt : platform::readFile(manifest);
+        std::optional<Json> j = text ? Json::parse(*text) : std::nullopt;
+        if (!j) logLine("[voice] the walk's recorded lines are not here (voice/manifest.json)");
+        for (const Json& line : j ? (*j)["lines"].array() : std::vector<Json>{}) {
+            std::string path = platform::resourcePath("voice/" + line["file"].string(""));
+            if (!path.empty()) lines[line["name"].string("")] = RecordedLine{path, line["text"].string(""), line["seconds"].number(0)};
+        }
+    }
+    auto found = lines.find(name);
+    if (found == lines.end()) return std::nullopt;
+    return found->second;
+}
+
+std::optional<double> Voice::tellRecorded(const std::string& name) {
+    std::optional<RecordedLine> r = recordedLine(name);
+    if (!r) {
+        logLine("[voice] the walk has no recorded line " + name);
+        return std::nullopt;
+    }
+    pendingRecorded = *r;
+    pending.reset();
     if (ears) send(AskToSpeak{});
     else {
-        speak(text);
-        pending.reset();
+        playRecorded(*r);
+        pendingRecorded.reset();
     }
+    return r->seconds;
+}
+
+void Voice::playRecorded(const RecordedLine& r) {
+    if (sound) sound->stop();
+    sound.reset();
+    int number = ++reply;
+    spoken = r.text;
+    shown.momoText.clear();
+    std::weak_ptr<Inbox> box = inbox;
+    if (muted) {
+        sound = std::make_shared<UnheardFile>();
+        unheardReply = UnheardReply{number, clock + r.seconds};
+    } else {
+        sound = play(r.path, [box, number](bool) {
+            if (auto b = box.lock()) {
+                std::lock_guard<std::mutex> g(b->lock);
+                b->played.push_back(number);
+            }
+        });
+    }
+    if (!sound) {
+        spoken.clear();
+        send(ReplyEnded{});
+        return;
+    }
+    soundFrom = clock;
+    soundSeconds = r.seconds;
+    logLine("[voice] speaking the walk's own line: " + spoken);
+    if (awaiting()) turnTo(Idle{});
+}
+
+void Voice::askLesson(const LessonAsk& ask, const std::string& fallback) {
+    auto* ready = std::get_if<Ready>(&link);
+    if (!ready) {
+        logLine("[voice] the live voice is not open, so the walk's own line");
+        tellRecorded(fallback);
+        return;
+    }
+    // (Within the service's limits, which drop a frame past them.)
+    auto cut = [](const std::string& s, size_t most) {
+        if (s.size() <= most) return s;
+        size_t at = most;
+        while (at > 0 && (uint8_t(s[at]) & 0xC0) == 0x80) at--;
+        return s.substr(0, at);
+    };
+    Json cards = Json::list();
+    for (size_t i = 0; i < ask.cards.size() && i < 8; i++) {
+        cards.push(Json::object().set("title", cut(ask.cards[i].first, 120)).set("says", cut(ask.cards[i].second, 240)));
+    }
+    int turn = ++turns;
+    sendLive(Json::object().set("t", "lesson").set("turn", turn).set("words", cut(ask.words.empty() ? "(nothing)" : ask.words, 500))
+                 .set("picture", cut(ask.picture, 600)).set("cards", cards));
+    lesson = Lesson{turn, clock, fallback, ""};
+    logLine(fmt("[voice] the lesson's words go to the live Momo (turn %d)", turn));
 }
 
 void Voice::joined(const Settings& settings, bool speaks, bool live, const std::string& id) {
@@ -428,6 +509,7 @@ void Voice::say(const std::string& text) {
 void Voice::speak(const std::string& text) {
     if (sound) sound->stop();
     sound.reset();
+    soundSeconds = 0;
     int number = ++reply;
     spoken = text;
     platform::Request request;
@@ -538,6 +620,11 @@ void Voice::frame(double now) {
                            if (tutoring && tutoring->said) tutoring->said("");      // GUIDE
                        },
                        [&](Listener::Speak&) {
+                           if (pendingRecorded) {
+                               playRecorded(*pendingRecorded);
+                               pendingRecorded.reset();
+                               return;
+                           }
                            if (!pending) return;
                            speak(*pending);
                            pending.reset();
@@ -577,8 +664,10 @@ void Voice::frame(double now) {
         microphone.reset();
         ears.reset();
         reopenAt = -1;
-        if (pending) speak(*pending);
+        if (pendingRecorded) playRecorded(*pendingRecorded);
+        else if (pending) speak(*pending);
         pending.reset();
+        pendingRecorded.reset();
     } else if (failed && ears) {
         if (microphone) microphone->stop();
         microphone.reset();
@@ -659,6 +748,15 @@ void Voice::frame(double now) {
         if (awaiting()) turnTo(Idle{});
         shown.momoText = spoken;
     }
+    // GUIDE: the lesson put to the live Momo, and no sound from her yet: the walk's own line instead.
+    if (lesson && now - lesson->sentAt >= lessonWait) {
+        logLine(fmt("[voice] no sound from the live Momo %.0f s after the lesson's words, so the walk's own line", lessonWait));
+        std::string fallback = lesson->fallback;
+        lateLesson = lesson->id;
+        lateTurn = lesson->turn;
+        lesson.reset();
+        tellRecorded(fallback);
+    }
     if (unheardReply && now >= unheardReply->until) {
         played.push_back(unheardReply->number);
         unheardReply.reset();
@@ -666,6 +764,7 @@ void Voice::frame(double now) {
     for (int number : played) {
         if (number != reply) continue;
         sound.reset();
+        soundSeconds = 0;
         spoken.clear();
         send(ReplyEnded{});
         logLine("[voice] done speaking");
@@ -745,7 +844,7 @@ void Voice::openLive(double now) {
             else if (t == "heard") deliver(LiveHeard{m["turn"].integer(0), m["text"].string(""), m["final"].boolean(false)});
             else if (t == "quiet") deliver(LiveQuiet{m["turn"].integer(0)});
             else if (t == "text") {
-                deliver(LiveText{m["id"].string(""), m["text"].string(""), m["kind"].string("") == "results",
+                deliver(LiveText{m["id"].string(""), m["turn"].integer(0), m["text"].string(""), m["kind"].string("") == "results",
                                  std::max(0.0, m["ms"].number(0)) / 1000, std::max(0.0, m["from"].number(0)) / 1000});
             }
             else if (t == "done") deliver(LiveDone{m["id"].string("")});
@@ -795,6 +894,14 @@ void Voice::heardLive(LiveFrame& frame, double now) {
                    },
                    [&](LiveQuiet& q) {
                        if (q.turn == wordsOf) endThinking();
+                       if (lesson && q.turn == lesson->turn) {
+                           logLine("[voice] the live Momo has nothing to say to the lesson, so the walk's own line");
+                           std::string fallback = lesson->fallback;
+                           lateLesson = lesson->id;
+                           lateTurn = lesson->turn;
+                           lesson.reset();
+                           tellRecorded(fallback);
+                       }
                    },
                    [&](LiveNamed& n) {
                        if (n.ok) return;
@@ -815,6 +922,9 @@ void Voice::heardLive(LiveFrame& frame, double now) {
                    },
                    [&](LiveAudio& a) {
                        if (streaming || !std::holds_alternative<Ready>(link)) return;
+                       // GUIDE: the lesson's answer, too late: the walk's own line has been said in its place.
+                       if (!lateLesson.empty() && a.id == lateLesson) return;
+                       if (lesson && !lesson->id.empty() && a.id == lesson->id) lesson.reset();
                        if (!std::holds_alternative<Idle>(turn)) turnTo(Idle{});
                        LiveReply& r = liveReply(a.id);
                        if (!r.player && sounding) {
@@ -831,6 +941,9 @@ void Voice::heardLive(LiveFrame& frame, double now) {
                    },
                    [&](LiveText& t) {
                        if (streaming) return;
+                       if (lateTurn && t.turn == lateTurn) lateLesson = t.id;
+                       if (!lateLesson.empty() && t.id == lateLesson) return;
+                       if (lesson && t.turn == lesson->turn && lesson->id.empty()) lesson->id = t.id;
                        bool begins = !live || live->id != t.id;
                        LiveReply& r = liveReply(t.id);
                        r.text = t.text;
@@ -1021,6 +1134,11 @@ void Voice::show() {
                              turn);
     shown.level = 0;
     if ((shown.state == S::listening || shown.state == S::open) && ears) shown.level = levelOf(ears->loudness);
+    // GUIDE: a recorded line of the walk's, its words a little ahead of her voice, by how far into it she is.
+    if (shown.state == S::responding && sound && soundSeconds > 0) {
+        std::string words = revealed(spoken, (clock - soundFrom + wordsAhead) / soundSeconds);
+        if (words.size() > shown.momoText.size()) shown.momoText = words;
+    }
     if (shown.state == S::responding && sounding) {
         size_t at = size_t(sounding->played * 50);
         if (at < sounding->loudness.size()) shown.level = levelOf(sounding->loudness[at]);

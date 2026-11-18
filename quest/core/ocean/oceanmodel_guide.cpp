@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstring>
 #include <map>
 
 #include "../cards/ocean.h"
@@ -31,6 +32,11 @@ namespace {
 /// (a quarter of it, some 40% shown) from which it takes pinches.
 constexpr float homeButtonReach = 0.06f, homeCardMargin = 0.03f;
 constexpr double homeButtonShows = 0.15;
+/// s before the end of Momo's recorded answer to "what can you do" that its layer comes, as she says "here are some
+/// example requests" (the lead, WS78).
+constexpr double layerBeforeAnswerEnds = 2;
+/// tourTalk's lesson while the example cards listen: none of the lessons' own numbers.
+constexpr int exampleTalk = 1000;
 
 enum Act { begin = 100, closeSheet = 101, startOver = 102, openSheet = 103, tour = 104, tourSkip = 105, tourEnd = 106, tourBack = 107, homeClose = 108, tourSay = 109, offButtons = 110 };
 // The gestures a ghost hand teaches, in the order they are needed, and how long each waits once its moment has come.
@@ -582,9 +588,12 @@ void OceanModel::addWelcomeNotes() {
     // And what it makes of a sketch: here a stand-in, since the walk's picture is not one Momo knows. It is made
     // again with what was said (`tourAnswer`); the pictures beside it stand for what Momo would bring.
     teach.tourMarkLinks = fmt("{\"to\": \"note:%s\", \"why\": \"Next\"}", tourSteps[markStep + 1].note);
+    teach.tourMarkWork = toMark;
+    teach.tourMarkLike.clear();
     for (int n = 0; n < 3 && works > 0; n++) {
         used += 1;
-        teach.tourMarkLinks += fmt(", {\"to\": \"work:%d\", \"why\": \"Like it\"}", (works * (2 * used - 1)) / 23 % works);
+        teach.tourMarkLike.push_back((works * (2 * used - 1)) / 23 % works);
+        teach.tourMarkLinks += fmt(", {\"to\": \"work:%d\", \"why\": \"Like it\"}", teach.tourMarkLike.back());
     }
 }
 
@@ -933,7 +942,7 @@ void OceanModel::updateTour(double now, Vec3 eye) {
             return;
         }
         // (A lesson of talking to Momo: its answer is brought, as if it had been asked for.)
-        if (tourSteps[lesson].result[0] && !tourOnResult()) {
+        if (tourSteps[lesson].result[0] && !tourOnResult() && now >= teach.layerAt) {
             teach.tourWalkAt = now + 3.6;
             tourAnswer(lesson, lesson == markStep ? "What is she holding?" : "");
             return;
@@ -1138,7 +1147,8 @@ void OceanModel::updateTour(double now, Vec3 eye) {
                 CardRef c = n && n->ref.kind == Ref::Kind::work ? card(child) : nullptr;
                 if (!c || c->alpha.target() < 0.5f) continue;
                 signs.rounds.push_back(roundOn(*c, {0, -0.016f}, c->half * 2 + Vec2{0.06f, 0.09f}));
-                Vec3 from = c->point({0, -c->half.y - 0.03f}, 0.02f), to = c->point({0.06f, -c->half.y - 0.26f}, 0.02f);
+                // The way from it begins below the ring, so it never runs across the picture's title (WS76).
+                Vec3 from = c->point({0, -c->half.y - 0.016f - 0.045f - 0.015f}, 0.02f), to = c->point({0.06f, -c->half.y - 0.26f}, 0.02f);
                 signs.flows.push_back(arcBetween(from, to, c->right * 0.05f));
                 std::vector<Vec3> spot = roundOn(*c, {0.06f, -c->half.y * 2 - 0.3f}, c->half * 2, 0.012f, 0.016f);
                 if (spot.size() % 2) spot.pop_back();
@@ -1215,11 +1225,21 @@ void OceanModel::updateTour(double now, Vec3 eye) {
 
     // Talking to Momo: while a lesson waits for words, Momo's ears are the walk's, and what the walk has to say
     // about what it heard, or why it hears nothing, stands over the line (inside a picture gone into, over its words).
-    bool talking = here && !result && !passing && lesson == at && ((at == momoStep && open && !zoomed) || (at == markStep && teach.tourSent));
-    if (talking && !talkAt && over) talkAt = inRoom(*over) + stage.u * 0.084f;
+    bool talking = here && !result && !passing && lesson == at && now >= teach.layerAt &&
+                   ((at == momoStep && open && !zoomed) || (at == markStep && teach.tourSent));
+    // On the layer of what Momo can do, once her answer is over, her ears stay the walk's for as long as it is in front:
+    // asked one of its cards, she says what she would do (the user, WS78: not taken out of the welcome tree).
+    bool examples = at == momoStep && here && result && !zoomed && now >= teach.answerEnds;
+    if ((talking || examples) && !talkAt && over) talkAt = inRoom(*over) + stage.u * 0.084f;
     teach.talkPanelScale = zoomed ? 1.8f : 1;
-    tourTalk(at, talking, now, talkAt);
+    tourTalk(examples ? exampleTalk : at, talking || examples, now, talkAt);
     if (teach.tour < 0 || tourOnResult() != result) return;      // (it was answered: the tree has moved on under all this)
+    // An example card asked for: ringed while her reply to it plays.
+    if (examples && teach.askedCard >= 0 && now < teach.askedUntil) {
+        if (CardRef asked = card(teach.askedCard); asked && asked->alpha.target() > 0.5f) {
+            signs.rounds.push_back(roundOn(*asked, {0, 0}, asked->half * 2 + Vec2{0.04f, 0.04f}));
+        }
+    }
 
     // What is pointed with, drawn: gone while a hand of your own is at work (its own light is what to watch then).
     if (teach.marker) {
@@ -1331,7 +1351,8 @@ void OceanModel::tourTalk(int lesson, bool wanted, double now, std::optional<Vec
         } else if (voice) {
             voice->tutor(std::nullopt);
         }
-        if (want >= 0) logLine(fmt("[guide] lesson %d waits for words: Momo's ears are %d", want + 1, tourHearing()));
+        if (want == exampleTalk) logLine(fmt("[guide] the example cards listen for one asked: Momo's ears are %d", tourHearing()));
+        else if (want >= 0) logLine(fmt("[guide] lesson %d waits for words: Momo's ears are %d", want + 1, tourHearing()));
     }
     if (want < 0) {
         tourTalkPanel("", false, std::nullopt);
@@ -1346,6 +1367,14 @@ void OceanModel::tourTalk(int lesson, bool wanted, double now, std::optional<Vec
     if (teach.demo && Flags::has("guideSayAt") && !spoken && now >= Flags::number("guideSayAt")) {
         spoken = true;
         std::string words = Flags::string("guideSay").value_or("");
+        std::replace(words.begin(), words.end(), '_', ' ');
+        teach.talkHeard.push_back({false, words});
+    }
+    // `-guideSayAgainAt <s> -guideSayAgain <words>`: something more said, later (on the example cards, say).
+    static bool again = false;
+    if (teach.demo && Flags::has("guideSayAgainAt") && !again && now >= Flags::number("guideSayAgainAt")) {
+        again = true;
+        std::string words = Flags::string("guideSayAgain").value_or("");
         std::replace(words.begin(), words.end(), '_', ' ');
         teach.talkHeard.push_back({false, words});
     }
@@ -1366,6 +1395,10 @@ void OceanModel::tourTalk(int lesson, bool wanted, double now, std::optional<Vec
             logLine("[guide] the name, and nothing after it");
             continue;
         }
+        if (lesson == exampleTalk) {
+            tourExample(said, now);
+            continue;
+        }
         if (lesson == momoStep && !asksWhatItCan(said)) {
             teach.talkMisses += 1;
             std::string quoted = said.size() > 34 ? said.substr(0, 32) + "…" : said;
@@ -1374,6 +1407,11 @@ void OceanModel::tourTalk(int lesson, bool wanted, double now, std::optional<Vec
             continue;
         }
         tourAnswer(lesson, said);
+        return;
+    }
+    // (On the example cards nothing is waited for: only what was heard is said, and no way on is offered.)
+    if (lesson == exampleTalk) {
+        tourTalkPanel(teach.talkNote, false, at);
         return;
     }
     // Why nothing is heard, if nothing can be; otherwise what the last turn came to, or after a while a nudge.
@@ -1468,13 +1506,115 @@ void OceanModel::tourAnswer(int lesson, const std::string& words) {
     teach.talkNote.clear();
     tourTalkPanel("", false, std::nullopt);
     if (lesson == momoStep) tourDid("momo", 1);
-    // Momo says so itself, where it has a voice.
-    if (agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr) {
-        voice->tell(lesson == momoStep ? "Here is what I can do for you. Each card is something to ask me for." : "Here is a layer from your sketch.");
+    // Momo says so herself, where she has a voice: what she can do in her own recorded words (WS78, the user's choice);
+    // a sketch is put to the live Momo, who answers it and walks through what comes, or failing her, her recorded line.
+    double answer = 0;          // how long her recorded answer is, where she says one
+    if (lesson == momoStep) {
+        answer = sayRecorded("momo-can");
+        teach.answerEnds = time + answer;
+    } else if (agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr) {
+        {
+            agent::Voice::LessonAsk ask;
+            ask.words = words;
+            auto describe = [&](int w) {
+                if (w < 0 || w >= int(catalog->works.size())) return std::string();
+                const Work& k = catalog->works[size_t(w)];
+                std::string out = (k.kind.empty() ? "" : k.kind + ": ") + k.title;
+                for (const std::string* part : {&k.maker, &k.date, &k.medium, &k.museum}) {
+                    if (!part->empty()) out += ", " + *part;
+                }
+                return out;
+            };
+            ask.picture = describe(teach.tourMarkWork);
+            if (teach.tourMarkWork >= 0 && !catalog->works[size_t(teach.tourMarkWork)].about.empty()) ask.picture += ". " + catalog->works[size_t(teach.tourMarkWork)].about;
+            for (int w : teach.tourMarkLike) {
+                if (w < 0 || w >= int(catalog->works.size())) continue;
+                const Work& k = catalog->works[size_t(w)];
+                std::string says = k.maker;
+                if (!k.date.empty()) says += (says.empty() ? "" : ", ") + k.date;
+                ask.cards.push_back({k.title, says});
+            }
+            voice->askLesson(ask, "momo-sketch");
+        }
+    } else {
+        sayRecorded("momo-sketch");
     }
-    sound("ask");
-    soundLayerAfter = 0.3;
-    bring(note->second, lesson == momoStep ? "You asked Momo" : "You showed Momo");
+    // The layer she answers with comes as she says it is coming, near the end of her recorded answer; at once if she
+    // says none.
+    std::string result = tourSteps[lesson].result, label = lesson == momoStep ? "You asked Momo" : "You showed Momo";
+    double began = time;
+    auto arrive = [this, lesson, result, label, began, answer] {
+        if (!catalog || teach.tour != lesson || !onWelcomeTree() || tourOnResult()) return;
+        auto due = catalog->notes.find(result);
+        if (due == catalog->notes.end()) return;
+        if (answer > 0) logLine(fmt("[guide] its layer comes %.1f s into her %.1f s answer", time - began, answer));
+        sound("ask");
+        soundLayerAfter = 0.3;
+        bring(due->second, label);
+    };
+    double wait = std::max(0.0, answer - layerBeforeAnswerEnds);
+    teach.layerAt = time + wait;
+    if (wait > 0) after(wait, arrive);
+    else arrive();
+}
+
+double OceanModel::sayRecorded(const std::string& name) {
+    if (agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr) return voice->tellRecorded(name).value_or(0);
+    // No Momo in this copy: her recorded voice alone, with no words shown (the lead, WS78).
+    std::optional<agent::RecordedLine> line = agent::recordedLine(name);
+    if (!line) return 0;
+    walkSound = platform::playSound(line->path, [](bool) {});
+    logLine("[guide] Momo's recorded line, her voice alone: " + line->text);
+    return walkSound ? line->seconds : 0;
+}
+
+namespace {
+/// Which of the example cards of what Momo can do was asked for, loosely: of those whose words were heard, the one
+/// heard in the most of its words, so that "tree" or "hand" alone gives way to a fuller match (the lead, WS78).
+const char* exampleAsked(const std::string& said) {
+    std::string low;
+    for (char ch : said) low += char(std::tolower((unsigned char)ch));
+    struct Ask {
+        const char* card;
+        std::vector<const char*> says;
+    };
+    static const Ask asks[] = {
+        {"momo-can-tree", {"start a tree", "hitchcock", "camera trick", "grow a tree", "new tree", "tree"}},
+        {"momo-can-find", {"pictures of delft", "delft", "pictures of", "bring me", "find me", "find new"}},
+        {"momo-can-saved", {"anything about kubrick", "kubrick", "do i have", "have i saved", "what i saved", "saved"}},
+        {"momo-can-more", {"more like this", "more like", "show me more", "more of"}},
+        {"momo-can-hand", {"coding agent", "hand this off", "hand it off", "hand off", "hand"}},
+    };
+    const char* best = nullptr;
+    size_t most = 0;
+    for (const Ask& a : asks) {
+        for (const char* words : a.says) {
+            size_t n = std::strlen(words);
+            if (n > most && low.find(words) != std::string::npos) {
+                most = n;
+                best = a.card;
+            }
+        }
+    }
+    return best;
+}
+}  // namespace
+
+void OceanModel::tourExample(const std::string& said, double now) {
+    // "What can you do" again: her answer again. One of the cards: her reply to it, the card ringed while she says
+    // it. Anything else: her reply to anything else.
+    const char* card = asksWhatItCan(said) ? nullptr : exampleAsked(said);
+    std::string line = asksWhatItCan(said) ? "momo-can" : card ? card : "momo-can-other";
+    double seconds = sayRecorded(line);
+    teach.talkNote.clear();
+    teach.askedCard = -1;
+    if (card && tree) {
+        for (const auto& [id, node] : tree->nodes) {
+            if (node.ref.kind == Ref::Kind::note && node.ref.id == card) teach.askedCard = id;
+        }
+        teach.askedUntil = now + seconds;
+    }
+    logLine(fmt("[guide] asked of the example cards: %s; answered with %s", said.c_str(), line.c_str()));
 }
 
 /// Send, pinched inside the walk's picture: the marked part goes to Momo, and a word about it is waited for.

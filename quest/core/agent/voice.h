@@ -18,6 +18,7 @@
 // thread asks things of the listener through a queue, applied by whichever thread holds the listener next, and hears
 // what came of it through another; it never waits for the sound thread.
 #pragma once
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -33,6 +34,14 @@
 #include "presence.h"
 
 namespace agent {
+
+/// GUIDE: one of the app's lines recorded in Momo's voice (media `voice/<file>`), as `voice/manifest.json` lists it: where
+/// it is, its words exactly as said, and how long it is. Read once; nothing when the app does not carry it.
+struct RecordedLine {
+    std::string path, text;
+    double seconds = 0;
+};
+std::optional<RecordedLine> recordedLine(const std::string& name);
 
 class Voice {
 public:
@@ -94,8 +103,19 @@ public:
     /// Whether it can hear, and if not why: for the walk to say so.
     enum class Hearing { ready, starting, asking, refused, off };
     Hearing hearing() const;
-    /// A line of the walk's own, spoken as Momo's through the service's voice when it has one. Nothing is shown.
-    void tell(const std::string& text);
+    /// GUIDE: a line of the walk's own, recorded in Momo's voice and carried in the app (`recordedLine`): spoken as a reply
+    /// of hers is, with or without the service, its words shown as she says them. How long it is, s; nothing when there
+    /// is no such line.
+    std::optional<double> tellRecorded(const std::string& name);
+    /// GUIDE: the sketch lesson's words, put to the live Momo with what the lesson shows (agents/docs/protocol.md, the
+    /// `lesson` frame). She answers as she answers anything. Where she can't be reached, says nothing for the turn
+    /// (`quiet`), or has made no sound `lessonWait` s after, the recorded line `fallback` is said instead.
+    struct LessonAsk {
+        std::string words, picture;
+        std::vector<std::pair<std::string, std::string>> cards;     // each card's title, and what it says
+    };
+    void askLesson(const LessonAsk& ask, const std::string& fallback);
+    static constexpr double lessonWait = 4;
     /// A reply has come from the service and has not begun to sound yet: Momo is about to speak. At most `lineWait`.
     bool lineComing() const { return lineAt >= 0 && clock - lineAt < lineWait; }
     static constexpr double lineWait = 5;
@@ -155,6 +175,7 @@ private:
     };
     struct LiveText {
         std::string id;
+        int turn = 0;               // the turn it answers, when it answers one
         std::string text;
         bool results = false;       // what a piece of work brought, not the answer to what was just said
         double length = 0;          // s: the whole recording's, when the text came whole with it (`ms`); 0 for the live voice
@@ -214,6 +235,19 @@ private:
     int reply = 0;                  // the reply playing or on its way; earlier ones are let go
     platform::SoundRef sound;
     std::string spoken;
+    std::optional<RecordedLine> pendingRecorded;    // a recorded line waiting for the listener's leave to play
+    double soundFrom = 0, soundSeconds = 0;     // a recorded line playing: since when, and how long it is
+    /// GUIDE: the sketch lesson put to the live Momo: its turn, when, what to say if she doesn't, and her reply's id
+    /// once its words come.
+    struct Lesson {
+        int turn = 0;
+        double sentAt = 0;
+        std::string fallback, id;
+    };
+    std::optional<Lesson> lesson;
+    std::string lateLesson;         // a lesson's reply that came too late to be heard: its id, and its turn
+    int lateTurn = 0;
+    void playRecorded(const RecordedLine& r);
 
     /// /live: shut until a retry while the last hello offered it, connecting, or ready.
     struct Shut {

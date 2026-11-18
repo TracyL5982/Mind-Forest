@@ -1,0 +1,61 @@
+{
+ "format": "WAV, 16-bit PCM, mono, 24000 Hz: Momo's realtime voice as recorded, each line said exactly as its text",
+ "lines": [
+  {
+   "name": "momo-can",
+   "file": "momo-can.wav",
+   "seconds": 16.4,
+   "text": "Hey! I'm your AI thinking partner in your Mind Forest. I can help you think through ideas, answer questions, pull in new references like images or examples, and help you organize or save notes as you go. And now, here are some example requests you can try.",
+   "when": "The answer to \"Hi Momo, what can you do for me?\" in the Momo lesson, before the example cards come up (the user's words)."
+  },
+  {
+   "name": "momo-can-tree",
+   "file": "momo-can-tree.wav",
+   "seconds": 8.4,
+   "text": "I'd grow a new tree on Hitchcock's camera tricks, from what you've saved and what I find. Ask me once we're done here, and I'll show you.",
+   "when": "Said when the user asks the example \"Start a tree on Hitchcock's camera tricks.\""
+  },
+  {
+   "name": "momo-can-find",
+   "file": "momo-can-find.wav",
+   "seconds": 7.9,
+   "text": "I'd bring pictures of Delft from museums and the web, right around the card you have open. Ask me again after this, and I will.",
+   "when": "Said when the user asks the example \"Bring me some pictures of Delft.\""
+  },
+  {
+   "name": "momo-can-saved",
+   "file": "momo-can-saved.wav",
+   "seconds": 5.7,
+   "text": "I'd look through everything you've saved and tell you what you have on Kubrick. Try me once we're done here.",
+   "when": "Said when the user asks the example \"Do I have anything about Kubrick?\""
+  },
+  {
+   "name": "momo-can-more",
+   "file": "momo-can-more.wav",
+   "seconds": 8.5,
+   "text": "I'd bring more cards like the one you have open, and you can narrow it, like more, but older. Ask me on a real card after this.",
+   "when": "Said when the user asks the example \"Show me more like this.\""
+  },
+  {
+   "name": "momo-can-hand",
+   "file": "momo-can-hand.wav",
+   "seconds": 7.4,
+   "text": "I'd turn your tree into one file your coding agent can work from, and send it to you. Ask me once we're done here.",
+   "when": "Said when the user asks the example \"Hand this off to my coding agent.\""
+  },
+  {
+   "name": "momo-can-other",
+   "file": "momo-can-other.wav",
+   "seconds": 6.7,
+   "text": "I'll take that on once we're done here. For now, these cards show the kinds of things to ask me.",
+   "when": "Said for anything else the user says in that layer."
+  },
+  {
+   "name": "momo-sketch",
+   "file": "momo-sketch.wav",
+   "seconds": 2.2,
+   "text": "Here is a layer from your sketch.",
+   "when": "The sketch lesson's line when the live Momo cannot answer (no /live, `quiet`, or no sound within 4 s)."
+  }
+ ]
+}
