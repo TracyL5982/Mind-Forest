@@ -1173,7 +1173,7 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     // What the line over the tree says, and what is pointed at.
     signs.clear();
     std::string words, pinWords, spotWords;
-    std::optional<Vec3> pinAt, spotAt, offAt, talkAt, closedAt;
+    std::optional<Vec3> pinAt, spotAt, offAt, talkAt, closedAt, firstAt;
     // WS101: a card opened where it stands by a short pinch, not the lesson's own (the layer is still the lesson's).
     bool inPlace = tree->focused && tourHead() && tree->current != *tourHead();
     float pinSize = 0;
@@ -1242,9 +1242,10 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     } else if (at == 0 && lesson == 0 && !tree->focused) {
         // WS101: the walk's first card, not open yet: the pinch that opens it where it stands is the first lesson.
         words = "Point at card 1 and pinch to open it";
+        // (Card 1 looks as card 2 does when it is the one to act on: its tag over it, "Pinch here", and no round of its own.)
         if (CardRef first = tourCard(0); first && first->alpha.target() > 0.5f) {
-            signs.rounds.push_back(roundOn(*first, {0, -0.016f}, first->half * 2 + Vec2{0.06f, 0.09f}));
-            closedAt = first->position + stage.u * (first->half.y + 0.11f);
+            closedAt = first->position + stage.u * (first->half.y + 0.16f);
+            firstAt = first->position + stage.u * (first->half.y + 0.085f);
             // (The hand that pinches a card open stands under it, a little toward you.)
             if (teach.tourShown == 300 && teach.holder) {
                 Vec3 p = first->position - stage.u * (first->half.y + 0.09f + 0.24f * tourPinchSize) + first->normal * 0.06f;
@@ -1347,8 +1348,8 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     static const double skipAfter = Flags::has("guideSkipAfter") ? Flags::number("guideSkipAfter") : 14;
     bool waited = here && !passing && at > 0 && now - teach.tourLessonAt > skipAfter;
     bool showNext = open && nextCard && !zoomed && here && (at == 0 || passing || waited);
-    tourPin(teach.tourNextPin, teach.tourNextSaid, at == 0 ? "Pinch and hold here" : passing ? "Next" : "Or skip ahead: pinch and hold this card",
-            showNext ? std::optional<Vec3>(nextCard->position + stage.u * (nextCard->half.y + 0.085f)) : std::nullopt);
+    tourPin(teach.tourNextPin, teach.tourNextSaid, firstAt ? "Pinch here" : at == 0 ? "Pinch and hold here" : passing ? "Next" : "Or skip ahead: pinch and hold this card",
+            firstAt ? firstAt : showNext ? std::optional<Vec3>(nextCard->position + stage.u * (nextCard->half.y + 0.085f)) : std::nullopt);
 
     // Words by the thing to use: inside the card being marked (set above), or where a button does what the gesture does.
     if (!zoomed && here && !passing && !(at == pullStep && teach.tourBeat >= 1)) {
