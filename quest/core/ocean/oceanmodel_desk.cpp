@@ -518,10 +518,14 @@ void OceanModel::tendHover(double now) {
         Shelved& s = shelf[i];
         bool served = !forestDown && agentBridge && s.tree && agentBridge->serves(*s.tree);
         if (served && int(i) == most) s.hoverSeen = now;
-        bool keep = served && ((s.hoverSeen >= 0 && now - s.hoverSeen < hoverGrace) || now < s.buttonsUntil);
+        // (A button that says it took stays its while even when the tree is no longer the service's: a tree shared is taken out
+        // of the forest at once, and its cover stays.)
+        bool keep = (served && s.hoverSeen >= 0 && now - s.hoverSeen < hoverGrace) || (!forestDown && now < s.buttonsUntil);
         if (keep && !s.buttons) {
             showButtons(s, -1);
+            logLine("[ocean] Send and Share over " + s.tree->title);
         } else if (!keep && s.buttons) {
+            logLine("[ocean] Send and Share go from " + s.tree->title);
             for (const EntityRef& b : s.buttons->children) picks.erase(b.get());
             s.tilts.erase(std::remove(s.tilts.begin(), s.tilts.end(), s.buttons), s.tilts.end());
             fadeOut(s.buttons, 0.2f);
