@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { Item } from '../core/domain.ts';
+import { withShortTitle } from '../core/roles/types.ts';
 import { ScriptCard } from './script.ts';
 
 /**
@@ -58,13 +59,65 @@ export type ShowTree = z.infer<typeof ShowTree>;
  * (the user's call, 2026-11-18): the source "Pinterest", the credit "Pinterest pin", and the line under the card's words the same.
  */
 export function forJudges(item: Item): Item {
+  return ownForJudges(pinForJudges(item));
+}
+
+function pinForJudges(item: Item): Item {
   const from = typeof item.data.from === 'string' ? item.data.from : '';
   const credit = (item.data.credit as { text?: string } | undefined)?.text ?? '';
   const yours = /^Pinterest, your\b/i.test(from) || /^Your pin\b/i.test(credit);
   if (!yours) return item;
-  const lines = item.text.split('\n').map((line) => (line && (line === from || line === credit) ? 'Pinterest pin' : line));
-  const text = lines.filter((line, n) => line !== 'Pinterest pin' || lines.indexOf(line) === n).join('\n');
-  return { ...item, text, data: { ...item.data, from: 'Pinterest', credit: { text: 'Pinterest pin', ...(item.source.url ? { url: item.source.url } : {}) } } };
+  // The line under the words names the source last, after the maker and the date where the card has them: "Pylinsky, Pinterest, your Graph board".
+  const lines = item.text.split('\n').map((line) => (line && (line === from || line === credit) ? 'Pinterest pin' : from && line.endsWith(`, ${from}`) ? `${line.slice(0, -from.length)}Pinterest` : line));
+  const kept = lines.filter((line, n) => line !== 'Pinterest pin' || lines.indexOf(line) === n);
+  while (kept.length > 1 && kept.at(-1) === '') kept.pop();
+  return { ...item, text: kept.join('\n'), data: { ...item.data, from: 'Pinterest', credit: { text: 'Pinterest pin', ...(item.source.url ? { url: item.source.url } : {}) } } };
+}
+
+/** The walkthrough's own things, as its credits name them for the film's user, and as they read to a judge (WS102). */
+const OWN_CREDITS: [RegExp, string][] = [
+  [/^Your picture\b/, 'Saved picture'],
+  [/^Your photo\b/, 'Photo'],
+  [/^Your note$/, 'Note'],
+  [/^Your prototype\b/, 'Prototype'],
+];
+
+/**
+ * The walkthrough tree's own cards for a judge: a credit that says "Your picture", "Your photo", "Your note" or "Your prototype"
+ * says what it is without "your"; a title that begins "Your" begins "A"; a note whose words are only "Your own note" is "A note";
+ * and a link to the film's user's own Claude page goes, since it is theirs alone.
+ */
+function ownForJudges(item: Item): Item {
+  const credit = (item.data.credit as { text?: string; url?: string } | undefined) ?? undefined;
+  const rule = credit?.text ? OWN_CREDITS.find(([re]) => re.test(credit.text!)) : undefined;
+  const theirs = [item.source.url, credit?.url].some((url) => url && /^https:\/\/claude\.ai\//.test(url));
+  const title = /^Your /.test(item.title) ? item.title.replace(/^Your /, 'A ') : item.title;
+  const own = (line: string) => (line === 'Your own note' ? 'A note' : line);
+  if (!rule && !theirs && title === item.title && !item.text.split('\n').some((line) => own(line) !== line)) return item;
+  const after = rule ? credit!.text!.replace(rule[0], rule[1]) : credit?.text;
+  let lines = item.text.split('\n').map((line) => (rule && line === credit!.text ? after! : own(line)));
+  const data: Item['data'] = { ...item.data };
+  const source = { ...item.source };
+  if (theirs) {
+    lines = lines.filter((line) => line !== credit?.text);
+    delete data.credit;
+    delete data.site;
+    if (data.from === 'claude.ai') delete data.from;
+    delete source.url;
+  } else if (rule) {
+    data.credit = { ...credit, text: after };
+  }
+  return { ...item, title, text: lines.join('\n'), summary: own(item.summary), source, data: withShortTitle(data, title) };
+}
+
+/** The words on a walkthrough card's thread that speak to the film's user, as they read to a judge. */
+const OWN_WHYS: Record<string, string> = {
+  'where your own ideas are sorted now': 'where the ideas are sorted now',
+  'your own note on layers': 'a note on layers',
+};
+
+export function whyForJudges(why: string): string {
+  return OWN_WHYS[why] ?? why;
 }
 
 export interface Showcase {

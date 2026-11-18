@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { inLibrary, type ChangeSet, type Patch } from '../src/core/domain.ts';
 import { Mindstorm } from '../src/core/state.ts';
-import { forJudges } from '../src/demo/showcase.ts';
+import { forJudges, whyForJudges } from '../src/demo/showcase.ts';
 import { SqliteStore } from '../src/node/store.ts';
 
 const { values } = parseArgs({
@@ -46,7 +46,8 @@ try {
   const chosen = values.tree?.length ? ranked.filter((r) => values.tree!.includes(r.tree.id)) : ranked.slice(0, Number(values.trees));
 
   const treeIds = new Set(chosen.map((r) => r.tree.id));
-  const nodes = [...mind.nodes.values()].filter((n) => treeIds.has(n.treeId));
+  // A thread's words that speak to the film's user read as every judge's (`whyForJudges`).
+  const nodes = [...mind.nodes.values()].filter((n) => treeIds.has(n.treeId)).map((n) => ({ ...n, why: whyForJudges(n.why) }));
   const nodeIds = new Set(nodes.map((n) => n.id));
   // The pins read as every judge's, not as the user's own (`forJudges`).
   const items = [...mind.items.values()].filter((i) => inLibrary(i) || nodes.some((n) => n.itemId === i.id)).map(forJudges);

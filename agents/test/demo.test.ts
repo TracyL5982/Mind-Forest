@@ -10,7 +10,7 @@ import { itemOf, nodeOf as nodeOfCard } from '../src/demo/cards.ts';
 import { schedule } from '../src/demo/take.ts';
 import { loadScript } from '../src/demo/script.ts';
 import { demoData } from './demo-data.ts';
-import { loadShowcase, type Showcase } from '../src/demo/showcase.ts';
+import { forJudges, loadShowcase, whyForJudges, type Showcase } from '../src/demo/showcase.ts';
 import { startServer, type Running } from '../src/node/server.ts';
 import type { OpenRealtime, RealtimeEvent } from '../src/node/live.ts';
 import { recordingName } from '../src/demo/lines.ts';
@@ -947,6 +947,25 @@ test("no showcase card is a work the headset's library already holds, since a pi
   const { trees } = loadShowcase(join(demoDir, 'showcase'));
   const again = trees.flatMap(({ tree }) => tree.cards.filter((card) => card.href && library.has(card.href)).map((card) => `${tree.id}/${card.id}`));
   assert.deepEqual(again, []);
+});
+
+test("in a judge's starter the walkthrough's own cards read as no one's: no \"your\" in a credit, a title or a thread, and no link to the film's user's own page", () => {
+  const making = { media: (file: string) => ({ id: `id-${file}`, url: `/assets/id-${file}` }), assetUrl: (id: string) => `/assets/${id}`, now: () => '2026-11-18T00:00:00.000Z' };
+  const card = (id: string) => script.phases.flatMap((phase) => phase.cards).find((one) => one.id === id)!;
+  const judged = (id: string) => forJudges(itemOf(card(id), making));
+  const credit = (id: string) => (judged(id).data.credit as { text?: string } | undefined)?.text;
+  assert.equal(credit('warburg-library'), 'Saved picture · not checked');
+  assert.equal(credit('flower-tree'), 'Photo · sent to Momo on Telegram');
+  assert.equal(credit('note-tree-grows'), 'Note');
+  assert.equal(credit('janus-depth-layers'), 'Prototype · Janusian Zoom');
+  assert.equal(judged('figjam').title, 'A FigJam board');
+  const pin = judged('t080');
+  assert.deepEqual([pin.data.from, (pin.data.credit as { text: string }).text], ['Pinterest', 'Pinterest pin']);
+  assert.ok(pin.text.endsWith('\nPinterest pin\n\nEugene Pylinsky, Pinterest'), pin.text);
+  const note = judged('note-layers');
+  assert.ok(!JSON.stringify(note).includes('claude.ai') && note.text === 'A note', JSON.stringify(note));
+  for (const id of ['warburg-library', 'flower-tree', 'figjam', 'note-tree-grows', 'janus-depth-layers', 't080', 'note-layers']) assert.ok(!/\byour\b/i.test(`${judged(id).title}\n${judged(id).text}\n${JSON.stringify(judged(id).data)}`), id);
+  assert.deepEqual([whyForJudges('where your own ideas are sorted now'), whyForJudges('your own note on layers'), whyForJudges('a map for finding your way')], ['where the ideas are sorted now', 'a note on layers', 'a map for finding your way']);
 });
 
 test('a card with a credit keeps it as data.credit, with its page, as the Scout keeps a source credit line', () => {
