@@ -129,13 +129,13 @@ test('a headset is given a six-digit code and the bot\'s link; the judge who sen
   assert.deepEqual((await admin(s.hosted)).telegram, { bot: 'mind_palace_test_bot', paired: 2 });
 });
 
-test('a code lasts ten minutes, a new one replaces the last, and five wrong codes stop a chat\'s codes being read', { timeout: 20000 }, async () => {
+test('a code lasts thirty minutes, a new one replaces the last, and five wrong codes stop a chat\'s codes being read', { timeout: 20000 }, async () => {
   const s = await host();
   const first = await invite(s, A);
   const second = await invite(s, A);
   assert.notEqual(first.code, second.code);
   assert.match((await ask(s, ADA, { text: first.code }))[0]!.text, /^Hmm, that code didn’t work\./, 'the replaced code');
-  s.clock.now += 10 * 60_000 + 1;
+  s.clock.now += 30 * 60_000 + 1;
   assert.match((await ask(s, ADA, { text: second.code }))[0]!.text, /^Hmm, that code didn’t work\./, 'the expired code');
 
   const live = await invite(s, A);
@@ -175,8 +175,8 @@ test("a headset's pairing panel: told after its hello that it is not paired, it 
   assert.equal(given.paired, false);
   assert.equal(given.bot, 'mind_palace_test_bot');
   assert.ok(/^\d{6}$/.test(given.code ?? ''), 'a six-digit code');
-  assert.equal(given.expiresIn, 600, 'for ten minutes');
-  s.clock.now += 8 * 60 * 1000;
+  assert.equal(given.expiresIn, 1800, 'for thirty minutes');
+  s.clock.now += 28 * 60 * 1000;
   ws.send(JSON.stringify({ t: 'pair' }));
   await s.bot.until(() => told().length === 3);
   assert.ok(told()[2]!.code === given.code, 'asked again with two minutes to run, the same code');
@@ -185,7 +185,7 @@ test("a headset's pairing panel: told after its hello that it is not paired, it 
   ws.send(JSON.stringify({ t: 'pair' }));
   await s.bot.until(() => told().length === 4);
   assert.ok(told()[3]!.code !== given.code && /^\d{6}$/.test(told()[3]!.code ?? ''), 'with under a minute to run, a new one');
-  assert.equal(told()[3]!.expiresIn, 600);
+  assert.equal(told()[3]!.expiresIn, 1800);
 
   const elsewhere = await invite(s, A);
   await s.bot.until(() => told().length === 5);

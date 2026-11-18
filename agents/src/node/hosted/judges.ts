@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 import { z } from 'zod';
 import type { Channel, Delivery, Desk } from '../contact.ts';
 import { JUDGE_LINES, Talk } from '../talk.ts';
-import { allowed, Bot, CODE_MS, Kept, nameOf, Position, read, STRANGER_REPLIES, type BotOptions, type Message } from '../telegram.ts';
+import { allowed, Bot, Kept, nameOf, Position, read, STRANGER_REPLIES, type BotOptions, type Message } from '../telegram.ts';
 import type { Shares } from './shares.ts';
 
 export interface JudgeBotOptions extends BotOptions {
@@ -46,9 +46,11 @@ const PAIRED = 'We’re paired. I’m Momo, the voice of the Mind Forest in your
 const UNPAIRED = 'Okay, we’re unpaired. To connect again, say “Momo, connect my Telegram” in your headset.';
 /** The one line a chat that is not paired gets. */
 const STRANGER = 'Hi, I’m Momo, the voice of Mind Forest. I don’t know this chat yet. In your headset, say “Momo, connect my Telegram”, then send me the 6-digit code I give you there.';
-const WRONG_CODE = 'Hmm, that code didn’t work. A code works once, for 10 minutes. In your headset, say “Momo, connect my Telegram” and I’ll give you a new one to send here.';
+const WRONG_CODE = 'Hmm, that code didn’t work. A code works once, for 30 minutes. In your headset, say “Momo, connect my Telegram” and I’ll give you a new one to send here.';
 const NO_SPACE = 'I couldn’t open your headset’s Mind Forest just now. Try me again in a moment.';
 
+/** How long a pairing code works (the user, 2026-11-18: "let's do 30min"). */
+const CODE_MS = 30 * 60 * 1000;
 const WINDOW_MS = 10 * 60 * 1000;
 /** Wrong codes one chat may send in ten minutes before its codes are no longer read, so the million codes cannot be tried through. */
 const WRONG_CODES = 5;
