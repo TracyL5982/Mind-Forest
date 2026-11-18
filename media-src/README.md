@@ -8,6 +8,7 @@ Media the build tools read. Most of it is caches that git ignores. The one part 
 | `quest/fonts/` | Fraunces 72pt Soft Light and its italic, for the greeting's lettering, with `NOTICE.txt` | The Fraunces Project Authors, SIL Open Font License 1.1. The files are unmodified |
 | `quest/hands/` | The hand model the guide draws its gestures with, left and right | Dumped from a headset: `quest/tools/run.sh -- -dumpHandMesh -quitAfter 8` |
 | `quest/voice/` | Momo's recorded lines for the welcome tree's two spoken lessons, with their words and lengths in `manifest.json` | Recorded from Momo's realtime voice |
+| `quest/people/` | Eight round pictures, 300 x 300 px, for the list of people that Share with Friends opens on the demo. In this repository they are placeholders: a drawn head and shoulders on a colour, not a photo of anyone | Drawn by a script for this repository, in place of the film cast's photos, which are not public |
 
 ## How it is used
 
