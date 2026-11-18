@@ -89,7 +89,7 @@ public:
     static constexpr double sentFor = 0.4;
     /// Seconds Momo thinks at most, should nothing ever end it.
     static constexpr double longestThought = 20;
-    /// Seconds the note on a microphone that is off shows (`showMicrophoneNote`), and once the user refuses it.
+    /// Seconds the note on a microphone that is off shows (`addressedWithoutMicrophone`), and once the user refuses it.
     static constexpr double refusalShown = 10;
     /// s Momo's words run ahead of her voice, when the service says how long a reply's recording is (a demo take's line).
     /// The user, 2026-11-17: "I'd rather transcript to be a little ahead of realtime speech than being laggy".
@@ -111,22 +111,30 @@ public:
         std::function<void(const std::string& words)> said;     // what followed it; empty when nothing could be made of it
     };
     void tutor(std::optional<Tutor> t);
-    /// Whether it can hear, and if not why: for the walk to say so. `refused`: the user did not allow the microphone, and
-    /// the system would ask them again; `settingsOnly`: it has stopped asking, and only its Settings can allow it.
-    enum class Hearing { ready, starting, asking, refused, settingsOnly, off };
+    /// Whether it can hear, and if not why: for the walk to say so. `unasked`: the microphone has never been asked for on
+    /// this install, and is asked for where it is first needed (WS95); `refused`: the user did not allow it, and the
+    /// system would ask them again; `settingsOnly`: it has stopped asking, and only its Settings can allow it.
+    enum class Hearing { ready, starting, unasked, asking, refused, settingsOnly, off };
     Hearing hearing() const;
-    /// WS87: the one way the microphone is asked for again, by the walk's lessons by speaking as they begin, and by the
-    /// buttons for it (the note's "Allow microphone", the walk's "Open Settings"). Refused (its window missed, or answered
-    /// no), listening starts over and the system asks the user again. Where the system no longer asks, and `orSettings`
-    /// (a button was pressed: a lesson beginning never sends the user out of the app), its Settings for this app open;
-    /// where they can't be, `settingsWontOpen`. Nothing where it is not refused.
-    void askForMicrophone(bool orSettings = false);
+    /// WS87, WS95: the one way the microphone is asked for, first and again: by the walk's lessons by speaking as they
+    /// begin, by the greeting after the walk, by Momo addressed without it (`addressedWithoutMicrophone`), and by the
+    /// buttons for it (the note's "Allow microphone", the walk's "Open Settings").
+    /// - Never asked on this install: the system asks now, Momo's caption saying `why` while it does (by default, "Allow
+    ///   the microphone to talk to Momo"). Before the listener's model has loaded, it asks once it has.
+    /// - Refused (its window missed, or answered no): listening starts over and the system asks again.
+    /// - Where the system no longer asks, and `orSettings` (a button was pressed: nothing else sends the user out of the
+    ///   app), its Settings for this app open; where they can't be, `settingsWontOpen`.
+    /// Nothing where the microphone is allowed.
+    void askForMicrophone(bool orSettings = false, const std::string& why = "");
+    /// As `askForMicrophone`, only where it has never been asked for on this install: the greeting after the walk (WS95),
+    /// which never asks again for one refused.
+    void askForMicrophoneFirst(const std::string& why);
     /// The microphone is not allowed: Momo shows a quiet mark for it.
     bool microphoneOff() const { return microphoneRefusedAt >= 0; }
-    /// The note by Momo on a microphone that is off: what is wrong, and "Allow microphone", for `refusalShown`, or until
-    /// her reply sounds. It comes from what still works without the microphone (her name can't be heard): a pinch on Momo
-    /// or her mark, a question picked. Nothing while the microphone is allowed.
-    void showMicrophoneNote();
+    /// Momo addressed by what works without the microphone, her name being unheard without it: a pinch on her or her
+    /// mark, a question picked. Never asked, the microphone is asked for now; refused, her note shows what is wrong, with
+    /// "Allow microphone", for `refusalShown` or until her reply sounds. Nothing while the microphone is allowed.
+    void addressedWithoutMicrophone();
     /// "Open Settings" could not open them: the words for where to switch the microphone on stand alone.
     bool settingsWontOpen() const { return settingsUnopened; }
     /// GUIDE: a line of the walk's own, recorded in Momo's voice and carried in the app (`recordedLine`): spoken as a reply
@@ -260,6 +268,9 @@ private:
     double microphoneRefusedAt = -1;
     bool microphoneSettingsOnly = false;    // refused, and the system no longer asks
     bool settingsUnopened = false;          // the system's Settings could not be opened from here
+    bool microphoneUnasked = false;         // never asked for on this install: nothing is opened until it is wanted
+    bool askWhenLoaded = false;             // wanted before the listener's model had loaded: asked for once it has
+    std::string askingWhy;                  // what the caption says while the system asks
     double noteUntil = -1;                  // the note on a microphone that is off shows until then
     int microphoneFailures = 0;     // in a row, since sound last came
     double reopenAt = -1;
@@ -400,7 +411,9 @@ private:
     Crew crew;
     Presence shown;
 
-    void start();
+    /// Loads the listener's model, then opens the microphone where it is allowed, or `ask`ed for (WS95: never at launch
+    /// unasked; a microphone refused on an earlier run stays refused, with its mark, until asked for again).
+    void start(bool ask = false);
     /// Every change of turn goes through here: leaving thinking stops its loop, and being sent plays the tone.
     void turnTo(Turn next);
     /// No answer is coming, or the work began: thinking ends, once the turn has shown as sent.

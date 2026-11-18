@@ -34,6 +34,8 @@ object Sound {
     private const val RATE = 16000
     /** Ms Momo's caption says why before the system asks, so the reason is read first. */
     private const val REASON_FIRST = 1500L
+    /** The app's own record of the permissions it has asked for (`leave`). */
+    private const val ASKED = "asked"
 
     private class Mic(val running: AtomicBoolean, val thread: Thread)
 
@@ -56,6 +58,7 @@ object Sound {
             return
         }
         synchronized(this) { asking = handle to source }
+        activity.getSharedPreferences(ASKED, Activity.MODE_PRIVATE).edit().putBoolean("microphone", true).apply()
         microphoneAsking(handle)
         Handler(Looper.getMainLooper()).postDelayed({
             if (synchronized(this) { asking?.first == handle }) (activity as MainActivity).askPermission(Manifest.permission.RECORD_AUDIO, ASK)
@@ -125,13 +128,15 @@ object Sound {
 
     /**
      * Whether the app may use the microphone: 0 it may, 1 not yet and the system would ask, 2 not and the system has
-     * stopped asking (refused twice, Android 11 on), so only Settings can allow it. Before the first ask the system
-     * gives no reason to show either, so that reads as 2 too: the native side reads this only after asking.
+     * stopped asking (refused twice, Android 11 on), so only Settings can allow it, 3 never asked on this install. The
+     * system gives no reason to show both before the first ask and after it stops asking, so whether it was ever asked
+     * is kept with the app's own files (cleared with them, as `pm clear` clears the permission too).
      */
     @JvmStatic
     fun leave(activity: Activity): Int = when {
         activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> 0
         activity.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) -> 1
+        !activity.getSharedPreferences(ASKED, Activity.MODE_PRIVATE).getBoolean("microphone", false) -> 3
         else -> 2
     }
 

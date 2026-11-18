@@ -1357,6 +1357,8 @@ int OceanModel::tourHearing() const {
     switch (voice->hearing()) {
     case agent::Voice::Hearing::ready: return 0;
     case agent::Voice::Hearing::starting: return 1;
+    // (Not asked for yet: the lesson beginning asks for it.)
+    case agent::Voice::Hearing::unasked: return 1;
     case agent::Voice::Hearing::asking: return 2;
     case agent::Voice::Hearing::refused: return 3;
     case agent::Voice::Hearing::settingsOnly: return 6;
@@ -1381,8 +1383,9 @@ void OceanModel::tourTalk(int lesson, bool wanted, double now, std::optional<Vec
         } else if (voice) {
             voice->tutor(std::nullopt);
         }
-        // The microphone refused (its window missed at launch, or answered no): as a lesson by speaking begins, the
-        // system asks for it again (WS87). Where the system no longer asks, the line says where it is switched on.
+        // As a lesson by speaking begins, the microphone is asked for: the first time here, where the lesson's words say
+        // why (WS95: nothing asks at launch), or again where it was refused (its window missed, or answered no; WS87).
+        // Where the system no longer asks, the line says where it is switched on.
         if (voice && (want == momoStep || want == markStep)) voice->askForMicrophone();
         if (want == exampleTalk) logLine(fmt("[guide] the example cards listen for one asked: Momo's ears are %d", tourHearing()));
         else if (want >= 0) logLine(fmt("[guide] lesson %d waits for words: Momo's ears are %d", want + 1, tourHearing()));
@@ -1899,6 +1902,9 @@ void OceanModel::showHome() {
     holder->addChild(card);
     teach.home = holder;
     teach.homeDue = false;
+    // WS95: after the walk, done or skipped, the microphone is asked for if it never was, so that "Hey Momo" works from
+    // here on (a judge who skips the walk included); Momo's caption says why as the system asks.
+    if (agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr) voice->askForMicrophoneFirst("Allow the microphone to say “Hey Momo” any time");
     // (Momo is Kai's name for who answers. In this build the questions it points at are still headed "Ask the gardener".)
     const char* names[3] = {"A tree", "An item", "Momo"};
     for (int k = 0; k < 3; k++) {
@@ -2038,8 +2044,8 @@ void OceanModel::guideAct(int action) {
     if (action == Act::momoNote || action == Act::allowMicrophone) {
         agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr;
         if (action == Act::momoNote) {
-            logLine("[presence] Momo is pinched with the microphone off: her note shows");
-            if (voice) voice->showMicrophoneNote();
+            logLine("[presence] Momo is pinched without the microphone: it is asked for, or her note shows");
+            if (voice) voice->addressedWithoutMicrophone();
         } else {
             logLine("[presence] the note's Allow microphone is pinched");
             if (voice) voice->askForMicrophone(true);

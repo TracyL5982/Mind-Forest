@@ -177,20 +177,25 @@ void PresenceDemo::frame(double now) {
         }
     }
     presence.agents = crew.lines("Momo");
-    // `-presenceMic off|note|settings`: as if the microphone were not allowed (WS87): Momo quiet with its mark; with the
-    // note a pinch on her opens; or with the note where only the system's Settings can allow it.
+    // `-presenceMic off|note|settings|unasked|asking|greeting`: as if the microphone were not allowed (WS87): Momo quiet
+    // with its mark; with the note a pinch on her opens; or with the note where only the system's Settings can allow it.
+    // Or not asked for yet (WS95): Momo quiet, unmarked; as the system asks; or as the greeting after the walk asks.
     if (std::optional<std::string> mic = Flags::string("presenceMic")) {
         presence.state = Presence::State::off;
         presence.userText.clear();
         presence.momoText.clear();
         presence.agents.clear();
-        presence.microphoneOff = true;
+        bool first = *mic == "unasked" || *mic == "asking" || *mic == "greeting";
+        presence.microphoneOff = !first;
+        presence.microphoneUnasked = *mic == "unasked";
         presence.notice.clear();
-        if (*mic != "off") {
+        if (*mic == "asking") presence.notice = "Allow the microphone to talk to Momo";
+        else if (*mic == "greeting") presence.notice = "Allow the microphone to say “Hey Momo” any time";
+        else if (*mic != "off" && !first) {
             presence.notice = *mic == "settings" ? "Momo can’t hear you: turn on the microphone in Settings › Privacy and safety › App permissions"
                                                  : "Momo can’t hear you: the microphone is off";
         }
-        presence.noticeButton = presence.notice.empty() ? "" : "Allow microphone";
+        presence.noticeButton = presence.notice.empty() || first ? "" : "Allow microphone";
     }
     model.conversing = presence.conversing();
     Mat4 head = platform::head().value_or(Mat4::trs(model.stage.origin, Quat::identity(), {1, 1, 1}));

@@ -113,7 +113,7 @@ MicrophoneLeave microphoneLeave() {
         e->ExceptionClear();
         return MicrophoneLeave::askable;
     }
-    return said == 0 ? MicrophoneLeave::given : said == 1 ? MicrophoneLeave::askable : MicrophoneLeave::settingsOnly;
+    return said == 0 ? MicrophoneLeave::given : said == 1 ? MicrophoneLeave::askable : said == 3 ? MicrophoneLeave::unasked : MicrophoneLeave::settingsOnly;
 }
 
 SoundRef playSound(const std::string& path, std::function<void(bool played)> done) {
