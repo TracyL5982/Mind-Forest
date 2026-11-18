@@ -84,14 +84,15 @@ test('going to a round builds every round before it, kept, and leaves it the nex
   try {
     await run.demo!.goto('n3');
     const built = before('n3');
-    assert.deepEqual(built.map((phase) => phase.id), ['r1', 'n2', 'mo']);
+    assert.deepEqual(built.map((phase) => phase.id), ['r1', 'n2']);
     const wanted = built.flatMap((phase) => phase.cards).length;
     assert.equal(run.mind.trees.size, 1);
     assert.equal(run.mind.nodes.size, wanted + 1);
     assert.ok([...run.mind.nodes.values()].every((node) => node.status === 'kept'));
-    assert.equal(run.demo!.status().armed, 3);
-    // Round 2 hangs from the paper Round 1 brought, as the script says.
-    assert.deepEqual(titlesUnder(run, 'Virtual memory palaces: immersion aids recall').sort(), cardsOf('n2').map((card) => card.title).sort());
+    assert.equal(run.demo!.status().armed, 2);
+    // Round 2 hangs from the film Round 1 brought, as the script says, and Round 3 waits on the Neurones poster with nothing under it.
+    assert.deepEqual(titlesUnder(run, 'Slice of Heartland').sort(), cardsOf('n2').map((card) => card.title).sort());
+    assert.deepEqual(titlesUnder(run, 'Neurones poster'), []);
     // The card's look is chosen with it: a paper is a reference, a picture carries its shape.
     const paper = nodeOf(run, 'Virtual memory palaces: immersion aids recall')!;
     assert.equal(paper.view.component, 'reference');
@@ -112,15 +113,15 @@ test('a request on the card a round is asked from plays that round as the Scout 
   await new Promise((open) => ws.on('open', open));
   try {
     await run.demo!.goto('n3');
-    const head = nodeOf(run, 'Llull’s ring')!;
-    await run.pipeline.more(head.id);
+    const head = nodeOf(run, 'Neurones poster')!;
+    await run.pipeline.ask(head.id, 'so how do we keep the information organized?');
     await run.pipeline.idle();
     await over(run);
     const landed = run.mind.children(head.id);
     assert.deepEqual(landed.map((node) => run.mind.item(node.itemId).title).sort(), cardsOf('n3').map((card) => card.title).sort());
     assert.ok(landed.every((node) => node.status === 'pick'), 'a round that is played lands as picks, so Momo tells of them');
     assert.equal(run.demo!.status().rounds.find((round) => round.id === 'n3')!.state, 'played');
-    assert.equal(run.demo!.status().armed, 4);
+    assert.equal(run.demo!.status().armed, 3);
     await new Promise((r) => setTimeout(r, 50));
     const steps = seen.filter((m) => m.t === 'activity' && m.activity!.role === 'scout' && m.activity!.state === 'start').map((m) => m.activity!.label);
     assert.ok(steps.includes('Checking what you already have'), steps.join(' | '));
@@ -162,8 +163,8 @@ test('the questions under a round\'s card are the script\'s, and the stage can b
   const run = await boot();
   try {
     await run.demo!.goto('n2');
-    const paper = nodeOf(run, 'Virtual memory palaces: immersion aids recall')!;
-    assert.deepEqual(await run.pipeline.questions(paper.id), script.phases.find((phase) => phase.id === 'n2')!.offers);
+    const film = nodeOf(run, 'Slice of Heartland')!;
+    assert.deepEqual(await run.pipeline.questions(film.id), script.phases.find((phase) => phase.id === 'n2')!.offers);
     const tree = [...run.mind.trees.keys()][0];
     // Going on keeps the tree a headset has standing; only an empty stage takes it away.
     await run.demo!.goto('f1');
