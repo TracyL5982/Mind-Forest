@@ -4,8 +4,8 @@
 //      sends the service a `look` for that card a moment after the line is kept
 //   2. the look holds the part of the picture the ring is round (its box: about 0.62 across and 0.4 down, as the ring was
 //      drawn) and two JPEGs, the part and the whole picture, each within the service's limits
-//   3. Send pinched right after the ring, before its look is made: the question waits for the look, and goes after it, so
-//      the Scout is shown the part ringed (the service gives it the look of the card asked about)
+//   3. Send pinched right after the ring: the question goes after the look (waiting for it if it is not made yet), so the
+//      Scout is shown the part ringed (the service gives it the look of the card asked about)
 //   4. the eraser takes the marks off, and the preview sends a look with no pictures: Momo is shown nothing of them
 //   5. on the welcome walk (a stand-in service with nothing in it, -guideDemo tour), the sketch lesson's picture ringed with
 //      the marker and sent: the preview sends a look of the sketch, by the work's title, round where the ring was drawn
@@ -16,7 +16,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checker, escape, flag, later, standIn, until } from './standin.mjs';
+import { checker, find, flag, later, standIn, until } from './standin.mjs';
 
 const seed = mkdtempSync(join(tmpdir(), 'see-mark-seed-'));
 writeFileSync(join(seed, 'mindstorm.sqlite'), '');
@@ -55,7 +55,7 @@ try {
   await stand.api('/api/demo/goto', { method: 'POST', body: JSON.stringify({ round: 'end' }) });
   for (let i = 0; i < 600 && (await (await stand.api('/api/demo/status')).json()).busy; i++) await later(0.1);
   // Taken to the card once the demo has set its tree up for the preview, gone into at 22 s, the pen up at 24, a ring drawn at
-  // 26 (kept at about 27.3), Send at 27.6, the eraser at 34.
+  // 26 (kept at about 27.3, its look made 0.3 s later), Send at 27.6, the eraser at 34.
   const run = stand.launch(shots, 'see-mark', 42, ['-zoomAt', '22', '-toolAt', '24', '-tool', 'pen', '-ringPictureAt', '26', '-toolAt3', '27.6', '-tool3', 'send',
     '-toolAt2', '34', '-tool2', 'eraser']);
   const ready = setUp();
@@ -79,10 +79,11 @@ try {
       round(look, 0.62, 0.4);
       keep(look, 'look');
     }
-    const waited = await until(run.log, /^\[agent\] the question waits for what is marked to be cut out: Tell me more about this part/, 0, 5);
-    check(waited, `Send right after the ring waits for its look (${waited?.line ?? 'no such line'})`);
+    await until(run.log, /^\[agent\] asked: Tell me more about this part/, 0, 5);
+    const waited = find(run.log, /^\[agent\] the question waits for what is marked to be cut out/);
     const asked = run.sent('ask').find((a) => a.nodeId === card.id);
-    check(look && asked && asked.at >= look.at, `and the question goes after it${asked ? `: "${asked.need}" at ${asked.at.toFixed(1)} s` : ''}`);
+    check(look && asked && asked.at >= look.at,
+      `Send right after the ring goes after its look${waited ? ', having waited for it' : ', which was made already'}${asked ? `: "${asked.need}" at ${asked.at.toFixed(1)} s` : ''}`);
     const erased = await until(run.log, /^\[agent\] Momo is shown nothing of Corals: its marks are gone$/, 0, 20);
     check(erased, `the eraser takes the marks off, and Momo is shown nothing of them (${erased?.line ?? 'no such line'})`);
     check(run.sent('look').some((l) => !l.crop && l.nodeId === card.id), 'the service is sent a look with no pictures');

@@ -359,8 +359,9 @@ void OceanModel::endEdit(CardView& c) {
     if (kept) {
         c.edits.push_back(made);
         if (agentBridge) agentBridge->edited(c.id, made);
-        // WS89: Momo is shown the line a moment after it is drawn (one more stroke of the same ring waits for the last).
-        if (made.kind == CardEdit::Kind::stroke) lookDue = std::pair{c.id, time + 0.8};
+        // WS89: Momo is shown the line a moment after it is drawn: soon enough to be there before words said at once, and a
+        // second stroke a moment later only sends it again, in its place (the lead's call, 2026-11-18: 0.3 s).
+        if (made.kind == CardEdit::Kind::stroke) lookDue = std::pair{c.id, time + 0.3};
         if (made.kind == CardEdit::Kind::highlight) logLine("[cards] highlighted \"" + made.quote + "\"");
         else logLine(fmt("[cards] drew a line of %d points", int(made.points.size())));
         sound("mark_made");

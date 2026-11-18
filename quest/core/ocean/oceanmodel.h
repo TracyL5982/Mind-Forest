@@ -1434,7 +1434,7 @@ private:
     void buildEdits(CardView& c);
     // AGENT (WS89): what the user marks on a picture is shown to Momo (oceanmodel_look.cpp).
     /// The open service card whose lines Momo is to be shown, and when: a moment after a line is drawn or the marks are
-    /// taken off, so a ring drawn in several strokes goes once; and a moment after a card with lines opens.
+    /// taken off, and a moment after a card with lines opens.
     std::optional<std::pair<int, double>> lookDue;
     /// Each frame: shows Momo what `lookDue` names once its moment comes.
     void lookFrame();
