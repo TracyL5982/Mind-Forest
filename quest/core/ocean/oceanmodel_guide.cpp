@@ -2026,7 +2026,7 @@ void OceanModel::showHome() {
     const float letter = 0.21f, space = letter * 0.2f;
     std::vector<Piece> words;
     float whole = 0;
-    for (const char* word : {"Welcome", "to", "Mind", "Forest"}) {
+    for (const char* word : {"You’re", "all", "set"}) {  // (WS103, the user: "Welcome to Mind Forest" here read as the welcome come again)
         std::optional<Piece> piece = art->lettering(word, letter);
         if (!piece) return;
         // (Each piece carries room round its word for the script's swing: the words overlap by that much.)
