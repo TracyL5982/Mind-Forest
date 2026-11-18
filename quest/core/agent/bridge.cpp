@@ -10,6 +10,8 @@
 
 #include "base.h"
 #include "platform.h"
+#include "agent/look.h"
+#include "async.h"
 #include "cards/cards.h"
 #include "ocean/oceanmodel.h"
 
@@ -627,8 +629,12 @@ void Bridge::fetchPictures(const std::string& noteID) {
     }
 }
 
+std::string Bridge::pictureFile(const std::string& src) {
+    return platform::dataDirectory() + "/agent-picture-" + std::to_string(std::hash<std::string>{}(src));
+}
+
 void Bridge::fetchPicture(const std::string& src) {
-    std::string file = platform::dataDirectory() + "/agent-picture-" + std::to_string(std::hash<std::string>{}(src));
+    std::string file = pictureFile(src);
     platform::Request request;
     request.url = client.address().resolve(src);
     request.saveTo = file;
@@ -1165,6 +1171,60 @@ void Bridge::erasedAll(int nodeID, const std::vector<std::string>& editIds) {
     std::vector<Command> commands;
     for (const std::string& editId : editIds) commands.push_back(Command::removeEdit(id, editId));
     client.send(Outbound::commands(editIds.size() == 1 ? "Erase a mark" : "Erase the marks", std::move(commands)));
+}
+
+void Bridge::look(int nodeID, const std::vector<std::vector<Vec2>>& lines, float box) {
+    Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
+    if (!p || !p->service.count(nodeID)) return;
+    NodeId id{p->service[nodeID]};
+    std::string title = model.catalog ? model.catalog->title(p->tree->nodes[nodeID].ref) : "";
+    if (lines.empty()) {
+        client.send(Outbound::look(id, title, std::nullopt));
+        logLine("[agent] Momo is shown nothing of " + title + ": its marks are gone");
+        return;
+    }
+    std::vector<std::string> shown = cards::pictures("agent-" + id.value);
+    if (shown.empty()) return;
+    // The picture as fetched, read again at up to 2048 px: the card's own is read at 1024, too coarse for a small part.
+    std::string file = pictureFile(shown.front());
+    see(id, title, [file] { return platform::decodeImage(file, 2048); }, lines, box);
+}
+
+void Bridge::look(const ImageRef& picture, const std::vector<std::vector<Vec2>>& lines, float box, const std::string& title) {
+    if (!picture) return;
+    see(std::nullopt, title, [picture] { return picture; }, lines, box);
+}
+
+void Bridge::see(const std::optional<NodeId>& nodeId, const std::string& title, std::function<ImageRef()> read, std::vector<std::vector<Vec2>> lines, float box) {
+    struct Made {
+        std::optional<Outbound::Seen> seen;
+        std::string sizes;
+    };
+    auto made = std::make_shared<Made>();
+    std::weak_ptr<Pictures> alive = pictures;
+    Async::run(
+        [made, read = std::move(read), lines = std::move(lines), box] {
+            ImageRef picture = read();
+            if (!picture || picture->rgba.empty() || picture->height <= 0) return;
+            picture->wait();
+            std::optional<Sight> s = sight(picture->width, picture->height, picture->rgba.data(), onPicture(lines, box, float(picture->width) / float(picture->height)));
+            if (!s) return;
+            std::string crop = platform::encodeJpeg(s->crop.width, s->crop.height, s->crop.rgba.data(), 80);
+            std::string whole = platform::encodeJpeg(s->whole.width, s->whole.height, s->whole.rgba.data(), 75);
+            if (crop.empty() || whole.empty()) return;
+            made->seen = Outbound::Seen{s->box, "data:image/jpeg;base64," + base64Encode(crop), "data:image/jpeg;base64," + base64Encode(whole)};
+            made->sizes = fmt("the part %d × %d, %d KB; the whole %d × %d, %d KB", s->crop.width, s->crop.height, int(crop.size() / 1024),
+                              s->whole.width, s->whole.height, int(whole.size() / 1024));
+        },
+        [this, alive, made, nodeId, title] {
+            if (alive.expired()) return;
+            if (!made->seen) {
+                logLine("[agent] what is marked on " + title + " could not be cut out, so Momo is not shown it");
+                return;
+            }
+            client.send(Outbound::look(nodeId, title, made->seen));
+            logLine("[agent] Momo is shown what is marked on " + title + " (" + made->sizes + ")");
+        });
 }
 
 void Bridge::pruned(int nodeID, const std::vector<TreeNode>& gone) {

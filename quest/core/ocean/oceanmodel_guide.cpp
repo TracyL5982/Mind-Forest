@@ -1704,6 +1704,8 @@ void OceanModel::tourSend() {
     teach.tourSent = true;
     sound("send");
     logLine("[guide] the sketch is sent to Momo");
+    // AGENT (WS89): and she is shown it, for her answer to what is asked of it (oceanmodel_look.cpp).
+    if (CardRef c = tourCard(markStep)) seeSketch(*c, teach.tourMarkWork);
 }
 
 void OceanModel::endTour(const char* why) {

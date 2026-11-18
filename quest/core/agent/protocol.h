@@ -2,6 +2,7 @@
 // field names of agents/src/core/domain.ts. Text from the service is parsed here, once, on the
 // thread it arrives on; past this file the types are trusted.
 #pragma once
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -409,6 +410,15 @@ public:
     static Outbound client(const Media& media);
     /// The headset is worn again after `away` s off (its session back in front), to the tenth of a second.
     static Outbound worn(double away);
+    /// WS89: what Momo is shown of a part of a picture the user marked (look.h): where the part is (x, y, width, height,
+    /// 0…1 of the picture, y down) and two JPEGs as data URLs, the part and the whole picture, each with the line drawn on
+    /// it. A card of the service's is named by its node; the headset's own (the walk's) by its title alone. No `seen`:
+    /// the card's marks are gone, and Momo is shown nothing of them.
+    struct Seen {
+        std::array<float, 4> box{};
+        std::string crop, whole;
+    };
+    static Outbound look(const std::optional<NodeId>& nodeId, const std::string& title, const std::optional<Seen>& seen);
     /// Share a tree with a friend (the Share button over a tree in the forest).
     static Outbound share(const TreeId& tree);
 

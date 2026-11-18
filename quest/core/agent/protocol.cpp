@@ -722,6 +722,18 @@ Outbound Outbound::share(const TreeId& tree) { return Outbound(named("share").se
 
 Outbound Outbound::worn(double away) { return Outbound(named("worn").set("away", std::round(away * 10) / 10)); }
 
+Outbound Outbound::look(const std::optional<NodeId>& nodeId, const std::string& title, const std::optional<Seen>& seen) {
+    Json j = named("look");
+    if (nodeId) j.set("nodeId", nodeId->value);
+    j.set("title", title.substr(0, 200));
+    if (seen) {
+        Json box = Json::list();
+        for (float v : seen->box) box.push(std::round(double(std::clamp(v, 0.f, 1.f)) * 1e4) / 1e4);
+        j.set("box", std::move(box)).set("crop", seen->crop).set("whole", seen->whole);
+    }
+    return Outbound(std::move(j));
+}
+
 Outbound Outbound::client(const Media& media) {
     Json files = Json::list();
     for (const std::string& f : media.files) files.push(Json(f));

@@ -10,7 +10,9 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.Surface
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.ByteBuffer
 import java.util.concurrent.Executors
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -20,6 +22,26 @@ object Media {
     /** A path that is a file inside the APK, as platform_android.cpp gives the judging build's media: "apk:media/…". */
     const val IN_APK = "apk:"
     lateinit var assets: AssetManager
+
+    /**
+     * AGENT (WS89): RGBA pixels, rows top to bottom, as a JPEG of `quality` 1…100, or null if it can't be made. Called from
+     * the native background thread (platform_android.cpp, `encodeJpeg`).
+     */
+    @JvmStatic
+    fun encodeJpeg(rgba: ByteArray, width: Int, height: Int, quality: Int): ByteArray? {
+        return try {
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            // ARGB_8888 is laid out in memory as R, G, B, A: the pixels go in as they are.
+            bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(rgba))
+            val out = ByteArrayOutputStream()
+            val made = bitmap.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(1, 100), out)
+            bitmap.recycle()
+            if (made) out.toByteArray() else null
+        } catch (e: Exception) {
+            Log.w("ocean", "[media] could not make a JPEG: $e")
+            null
+        }
+    }
 
     /**
      * A picture file as an ARGB_8888 bitmap in sRGB, no larger than

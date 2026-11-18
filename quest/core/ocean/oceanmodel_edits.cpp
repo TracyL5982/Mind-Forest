@@ -77,6 +77,8 @@ void OceanModel::buildEdits(CardView& c) {
     c.edits = agentBridge->edits(c.id);
     drawEdits(c);
     syncStretch(c);
+    // WS89: Momo is shown the lines already on it, a moment after it opens.
+    if (std::any_of(c.edits.begin(), c.edits.end(), [](const CardEdit& e) { return e.kind == CardEdit::Kind::stroke; })) lookDue = std::pair{c.id, time + 1.0};
 }
 
 void OceanModel::editFrame() {
@@ -180,6 +182,7 @@ void OceanModel::eraseAll(CardView& c) {
     if (ids.empty()) return;
     c.edits.clear();
     if (agentBridge) agentBridge->erasedAll(c.id, ids);
+    lookDue = std::pair{c.id, time + 0.2};      // WS89: and Momo is shown nothing of them
     drawEdits(c);
     syncStretch(c);
     sound("step_out", 0.6f);
@@ -302,6 +305,8 @@ void OceanModel::setEdits(int id, const std::vector<CardEdit>& edits) {
     c->edits = edits;
     drawEdits(*c);
     syncStretch(*c);
+    // WS89: lines drawn on another headset, or taken back by an undo, on the open card: Momo is shown them as they are now.
+    if (tree && tree->focus() == id) lookDue = std::pair{id, time + 0.8};
     logLine(fmt("[cards] %d edits on %s", int(edits.size()), catalog ? catalog->title(c->ref).c_str() : "a card"));
 }
 
@@ -354,6 +359,8 @@ void OceanModel::endEdit(CardView& c) {
     if (kept) {
         c.edits.push_back(made);
         if (agentBridge) agentBridge->edited(c.id, made);
+        // WS89: Momo is shown the line a moment after it is drawn (one more stroke of the same ring waits for the last).
+        if (made.kind == CardEdit::Kind::stroke) lookDue = std::pair{c.id, time + 0.8};
         if (made.kind == CardEdit::Kind::highlight) logLine("[cards] highlighted \"" + made.quote + "\"");
         else logLine(fmt("[cards] drew a line of %d points", int(made.points.size())));
         sound("mark_made");

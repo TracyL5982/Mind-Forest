@@ -45,6 +45,9 @@ void prefetchImage(const std::string& path, int maxPixel = 0);
 bool imageReady(const std::string& path, int maxPixel = 0);
 /// The host's decoder, which the three above are built on. May be called from any thread.
 ImageRef decodeImage(const std::string& path, int maxPixel);
+/// AGENT (WS89): RGBA pixels, rows top to bottom, as a JPEG of `quality` 1…100: its bytes, or empty if the host could not
+/// make one. May be called from any thread.
+std::string encodeJpeg(int width, int height, const uint8_t* rgba, int quality);
 
 // MARK: - Head and hands
 

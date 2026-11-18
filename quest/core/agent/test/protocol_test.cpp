@@ -441,6 +441,10 @@ std::vector<std::pair<Outbound, std::string>> outboundCases() {
         {Outbound::settings(SettingsPatch{}), R"({"patch":{},"t":"settings"})"},
         {Outbound::client(Media{.embeds = false, .files = {"mp4", "webm", "mp3"}}), R"({"media":{"embeds":false,"files":["mp4","webm","mp3"]},"t":"client"})"},
         {Outbound::worn(42.36), R"({"away":42.4,"t":"worn"})"},
+        // WS89: what the user marked, for Momo to see; and the marks gone.
+        {Outbound::look(NodeId{"n1"}, "Night stairs", Outbound::Seen{{0.25f, 0.123456f, 0.5f, 1.2f}, "data:image/jpeg;base64,AAAA", "data:image/jpeg;base64,BBBB"}),
+         R"({"box":[0.25,0.1235,0.5,1],"crop":"data:image/jpeg;base64,AAAA","nodeId":"n1","t":"look","title":"Night stairs","whole":"data:image/jpeg;base64,BBBB"})"},
+        {Outbound::look(std::nullopt, "Woman Reading a Letter", std::nullopt), R"({"t":"look","title":"Woman Reading a Letter"})"},
         {Outbound::share(t1), R"({"t":"share","tree":"t1"})"},
     };
 }

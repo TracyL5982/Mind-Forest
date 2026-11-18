@@ -8,6 +8,7 @@
 // is a note in the catalog ("agent-<item id>"), or the film or work itself when it is from the
 // headset's own library. A pick is a node that is not kept: its thread is dashed until a pinch keeps it.
 #pragma once
+#include <functional>
 #include <map>
 #include <mutex>
 #include <set>
@@ -105,6 +106,13 @@ public:
     void erasedAll(int nodeID, const std::vector<std::string>& editIds);
     /// A branch was cut with the flat of the hand; `gone` is what left with it.
     void pruned(int nodeID, const std::vector<TreeNode>& gone);
+    /// WS89: what the user marked on a card's picture, shown to Momo with their next words about it (look.h). Each line is a
+    /// run of points 0…1 of the picture, y down; none: the card's marks are gone. A card of the service's is named by its
+    /// node, and its picture is the file fetched for it, read again at full size; the headset's own (the walk's) comes
+    /// with its picture. Cut out and made JPEG off the frame thread, then sent.
+    /// The lines are on the box the picture is shown in, whose width over height is `box`: the picture is shown whole in it.
+    void look(int nodeID, const std::vector<std::vector<Vec2>>& lines, float box);
+    void look(const ImageRef& picture, const std::vector<std::vector<Vec2>>& lines, float box, const std::string& title);
     /// Writes down where this service's trees stand on the desk, in place of the headset's own shelf file.
     void saveShelf();
 
@@ -199,6 +207,10 @@ private:
     void type(int nodeID);
     /// Fetches the pictures a card shows from the service, off the frame thread.
     void fetchPictures(const std::string& noteID);
+    /// Where a picture fetched from the service is kept.
+    static std::string pictureFile(const std::string& src);
+    /// Cuts out what `lines` mark on the picture `read` gives, off the frame thread, and sends it (`look`).
+    void see(const std::optional<NodeId>& nodeId, const std::string& title, std::function<ImageRef()> read, std::vector<std::vector<Vec2>> lines, float box);
     void fetchPicture(const std::string& src);
     /// Pictures fetched and unpacked on a host thread, waiting for the frame thread: each with its picture, or none and
     /// whether the service said it can't be had (not found, gone, or not a picture the headset can draw) or it may yet come.

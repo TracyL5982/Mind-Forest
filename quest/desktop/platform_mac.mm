@@ -125,6 +125,28 @@ ImageRef decodeImage(const std::string& path, int maxPixel) {
     return image;
 }
 
+std::string encodeJpeg(int width, int height, const uint8_t* rgba, int quality) {
+    if (width <= 0 || height <= 0 || !rgba) return {};
+    std::string out;
+    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGDataProviderRef provider = CGDataProviderCreateWithData(nullptr, rgba, size_t(width) * size_t(height) * 4, nullptr);
+    CGImageRef cg = CGImageCreate(size_t(width), size_t(height), 8, 32, size_t(width) * 4, space, kCGImageAlphaNoneSkipLast | kCGBitmapByteOrder32Big,
+                                  provider, nullptr, false, kCGRenderingIntentDefault);
+    CFMutableDataRef data = CFDataCreateMutable(nullptr, 0);
+    CGImageDestinationRef destination = cg ? CGImageDestinationCreateWithData(data, CFSTR("public.jpeg"), 1, nullptr) : nullptr;
+    if (destination) {
+        NSDictionary* options = @{(id)kCGImageDestinationLossyCompressionQuality: @(std::clamp(quality, 1, 100) / 100.0)};
+        CGImageDestinationAddImage(destination, cg, (__bridge CFDictionaryRef)options);
+        if (CGImageDestinationFinalize(destination)) out.assign((const char*)CFDataGetBytePtr(data), size_t(CFDataGetLength(data)));
+        CFRelease(destination);
+    }
+    CFRelease(data);
+    if (cg) CGImageRelease(cg);
+    CGDataProviderRelease(provider);
+    CGColorSpaceRelease(space);
+    return out;
+}
+
 std::optional<Mat4> head() { return host::head; }
 const Hand& hand(int which) { return host::hands[which == 0 ? 0 : 1]; }
 // (`-lapHand` lays a left hand at rest where a lap is, which the hands then read: see main.cpp.)

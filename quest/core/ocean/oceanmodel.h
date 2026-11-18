@@ -1432,6 +1432,16 @@ private:
     void editFrame();
     /// Builds the ring and the edit meshes on a service card as it opens.
     void buildEdits(CardView& c);
+    // AGENT (WS89): what the user marks on a picture is shown to Momo (oceanmodel_look.cpp).
+    /// The open service card whose lines Momo is to be shown, and when: a moment after a line is drawn or the marks are
+    /// taken off, so a ring drawn in several strokes goes once; and a moment after a card with lines opens.
+    std::optional<std::pair<int, double>> lookDue;
+    /// Each frame: shows Momo what `lookDue` names once its moment comes.
+    void lookFrame();
+    /// A service card's lines on its picture, as 0…1 of the picture, given to Momo (`Bridge::look`); none once its marks are gone.
+    void seeMarks(CardView& c);
+    /// The walk's sketch: its strokes on its picture, given to Momo as the sketch is sent, for her answer to the lesson.
+    void seeSketch(const CardView& c, int work);
     /// The edits a card shows, as the service keeps them, drawn again when they change.
     void setEdits(int id, const std::vector<CardEdit>& edits);
     /// Draws a card's edits, and the one being drawn, where the content now stands in its window.

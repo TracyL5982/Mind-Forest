@@ -215,6 +215,30 @@ ImageRef decodeImage(const std::string& path, int maxPixel) {
     return out;
 }
 
+std::string encodeJpeg(int width, int height, const uint8_t* rgba, int quality) {
+    if (width <= 0 || height <= 0 || !rgba) return {};
+    JNIEnv* e = jni::env();
+    static jclass media = jni::findClass("com/kaifengwu/mindpalace/Media");
+    static jmethodID encode = e->GetStaticMethodID(media, "encodeJpeg", "([BIII)[B");
+    jsize size = jsize(size_t(width) * size_t(height) * 4);
+    jbyteArray pixels = e->NewByteArray(size);
+    if (!pixels) return {};
+    e->SetByteArrayRegion(pixels, 0, size, (const jbyte*)rgba);
+    auto bytes = (jbyteArray)e->CallStaticObjectMethod(media, encode, pixels, jint(width), jint(height), jint(quality));
+    e->DeleteLocalRef(pixels);
+    if (e->ExceptionCheck()) {
+        e->ExceptionClear();
+        return {};
+    }
+    std::string out;
+    if (bytes) {
+        out.resize(size_t(e->GetArrayLength(bytes)));
+        e->GetByteArrayRegion(bytes, 0, jsize(out.size()), (jbyte*)out.data());
+        e->DeleteLocalRef(bytes);
+    }
+    return out;
+}
+
 // MARK: - Head and hands
 
 std::optional<Mat4> head() { return host::head; }

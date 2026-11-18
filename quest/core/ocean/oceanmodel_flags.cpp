@@ -8,8 +8,10 @@
 #include <functional>
 #include <tuple>
 
+#include "../cards/cards.h"
 #include "../cards/gallery.h"
 #include "../cards/ocean.h"
+#include "../cards/paint.h"
 
 // MARK: - Pinches
 
@@ -699,6 +701,25 @@ void OceanModel::runFlags() {
             m.pinchByFlag({{left + p.size.x * a, p.center.y}, {left + p.size.x * b, p.center.y}}, 0, 0.6);
         });
     }
+    // AGENT (WS89): `-ringPictureAt t` draws a ring on the open card's picture with the pen up, round the point 0.62 across and
+    // 0.4 down it, as a hand circling part of a picture does: what Momo is then shown of it. (The picture is shown whole in
+    // its box: the ring is on the picture, wherever in the box that is.)
+    at("ringPictureAt", [](OceanModel& m) {
+        CardRef c = m.tree && m.tree->focus() ? m.card(*m.tree->focus()) : nullptr;
+        if (!c) return;
+        PictureFrame p = m.pictureFrame(*c);
+        std::optional<std::string> note = cards::ocean::cardOf(c->ref);
+        std::vector<std::string> shown = note ? cards::pictures(*note) : std::vector<std::string>{};
+        if (std::optional<float> aspect = shown.empty() ? std::nullopt : cards::aspectOf(shown.front()); aspect && *aspect > 0) {
+            float box = p.size.x / std::max(1e-4f, p.size.y);
+            p.size = *aspect < box ? Vec2{p.size.y * *aspect, p.size.y} : Vec2{p.size.x, p.size.x / *aspect};
+        }
+        Vec2 middle{p.center.x - p.size.x / 2 + p.size.x * 0.62f, p.center.y + p.size.y / 2 - p.size.y * 0.4f};
+        float r = p.size.x * 0.14f;
+        std::vector<Vec2> path;
+        for (int k = 0; k <= 20; k++) path.push_back(middle + Vec2{r * std::cos(float(k) * 0.3307f), r * 0.8f * std::sin(float(k) * 0.3307f)});
+        m.pinchByFlag(path, 0, 1.2);
+    });
     auto open = [](OceanModel& m) { return m.tree && m.tree->focus() ? m.card(*m.tree->focus()) : nullptr; };
     // A point of the open face over words, or over none, in the window as it stands.
     auto spot = [](OceanModel& m, CardView& c, bool words) -> std::optional<Vec2> {
