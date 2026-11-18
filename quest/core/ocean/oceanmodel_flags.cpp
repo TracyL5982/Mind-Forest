@@ -162,13 +162,21 @@ void OceanModel::pinchEnded(Vec3 point) {
     // closes a card gone into). The Swift asks only how far apart the ends are.
     bool still = std::max(moved, p.reach) < 0.035f;
     // AGENT: a button over a tree counts a pinch that began on it and lets go with the ray still on its target, however far the
-    // ray went between, as the guide's buttons do (WS73, WS75); one that lets go anywhere else does nothing.
+    // ray went between, as the guide's buttons do (WS73, WS75). And as theirs do, one let go within about a second with the ray
+    // on nothing else that is pinched: on nothing, the backdrop, or the tree the button stands over, since the ray at the
+    // release can't be trusted on the headset (the lead, WS79). One that lets go anywhere else, the other button too, does
+    // nothing.
     if (p.pick.kind == Pick::Kind::coverButton) {
+        const char* which = p.pick.question == 0 ? "Send" : "Share";
         std::optional<Pick> under = over ? pick(over) : std::nullopt;
         bool onIt = under && under->kind == Pick::Kind::coverButton && under->index == p.pick.index && under->question == p.pick.question;
-        if (still || onIt) tap(p.pick);
-        else logLine(fmt("[ocean] a pinch on %s let go: not taken, the ray had left its button (%.0f cm, %.1f s%s)", p.pick.question == 0 ? "Send" : "Share",
-                         double(std::max(moved, p.reach)) * 100, time - p.began, under && under->kind != Pick::Kind::background ? ", on something else" : ""));
+        bool nothingElse = !under || under->kind == Pick::Kind::background || (under->kind == Pick::Kind::shelf && under->index == p.pick.index);
+        bool quickly = !still && !onIt && nothingElse && time - p.began < buttonQuickly;
+        const char* where = !nothingElse ? "something else" : !under ? "nothing" : under->kind == Pick::Kind::background ? "the backdrop" : "its tree";
+        if (quickly) logLine(fmt("[ocean] a pinch on %s taken: let go within %.1f s, the ray on %s", which, time - p.began, where));
+        if (still || onIt || quickly) tap(p.pick);
+        else logLine(fmt("[ocean] a pinch on %s let go: not taken, the ray had left its button (%.0f cm, %.1f s, on %s)", which,
+                         double(std::max(moved, p.reach)) * 100, time - p.began, where));
         return;
     }
     if (marking) {
