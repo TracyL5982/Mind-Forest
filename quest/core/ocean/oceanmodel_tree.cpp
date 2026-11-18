@@ -86,6 +86,13 @@ void OceanModel::startBrief(int i) {
     if (!ref) return;
     Brief brief = catalog->briefs[i];
     clearPeek();
+    // AGENT: joined to the service, a tree started from one of the forest's questions is the service's, as a tree from a
+    // piece of the ocean is: Momo is asked for it. The headset's own tree, where a pinch makes a layer and Momo knows
+    // nothing of what is open, is not made. (The user, 2026-11-18, in one of them: "momo has no idea of which one is selected".)
+    if (agentBridge) {
+        if (!agentBridge->treeAbout(brief.title)) logLine("[ocean] the service can't be reached, so no tree is started on " + brief.title);
+        return;
+    }
     whenClear([this, ref = *ref, brief] {
         if (!catalog) return;
         standingSpot = std::nullopt;

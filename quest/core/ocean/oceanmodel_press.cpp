@@ -963,7 +963,7 @@ void OceanModel::rebuildStrip() {
             if (piece) widest = widest ? std::max(*widest, piece->size.x) : piece->size.x;
         }
         float left = -widest.value_or(0.3f) / 2;
-        add(art->heading("Ask the gardener", Tone::question), left, 0.078f, std::nullopt);
+        add(art->heading(agentBridge ? "Ask Momo" : "Ask the gardener", Tone::question), left, 0.078f, std::nullopt);
         for (size_t i = 0; i < briefs.size(); i++) add(briefs[i], left, 0.032f - float(i) * 0.052f, Pick::brief(int(i)));
         // Every gesture, a pinch away (oceanmodel_guide.cpp).
         if (teach.on) {

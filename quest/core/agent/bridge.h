@@ -91,6 +91,8 @@ public:
     /// the user would say it, so the service makes it, rooted on that piece, and it stands when it comes (`changed`).
     /// False when the service can't be reached.
     bool treeFrom(const Ref& ref);
+    /// The same for a subject given in words, such as one of the questions the forest offers with no tree open.
+    bool treeAbout(const std::string& title);
     /// Whether a tree is one of the service's.
     bool serves(const Tree& tree);
     /// One of the headset's own pieces brought into the standing tree, which is the service's: it goes to the service as a
