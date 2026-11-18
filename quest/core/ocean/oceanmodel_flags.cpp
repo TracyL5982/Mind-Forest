@@ -363,7 +363,8 @@ void OceanModel::handle(const Hands::Event& event) {
         int d = event.steps;
         logLine(fmt("[ocean] fist: layer %d", d));
         moveLayer(d);
-        guideDid("step");
+        // (Which way, for the walk's pull-and-push lesson: more than 0 pulled back, less pushed forward.)
+        guideDid("step", float(d));
         break;
     }
     case Hands::Event::Kind::pan:
@@ -763,8 +764,15 @@ void OceanModel::runFlags() {
         }
         m.pinchByFlag(path, 0.6, 1.2);
     });
-    at("backAt", [](OceanModel& m) { m.moveLayer(1); });
-    at("backAgainAt", [](OceanModel& m) { m.moveLayer(1); });
+    // (Each tells the guide which way, as a closed hand's step does.)
+    at("backAt", [](OceanModel& m) {
+        m.moveLayer(1);
+        m.guideDid("step", 1);
+    });
+    at("backAgainAt", [](OceanModel& m) {
+        m.moveLayer(1);
+        m.guideDid("step", 1);
+    });
     // `-backs <n>` steps back n layers, one every 2.4 s from `-backsAt` (or 4 s); `-forwards <n>` then comes forward again.
     int backs = Flags::integer("backs"), forwards = Flags::integer("forwards");
     double backsAt = Flags::number("backsAt") > 0 ? Flags::number("backsAt") : 4;
@@ -793,7 +801,10 @@ void OceanModel::runFlags() {
         }
     });
     at("outAt", [](OceanModel& m) { m.stepOut(); });
-    at("forwardAt", [](OceanModel& m) { m.moveLayer(-1); });
+    at("forwardAt", [](OceanModel& m) {
+        m.moveLayer(-1);
+        m.guideDid("step", -1);
+    });
     at("placeAt", [](OceanModel& m) { m.carryOne(); });
     // `-carryAt t` carries the cover `-carry <i>` (the first, if not given) along the shelf,
     // drawn `-carryRight` and `-carryUp` metres.
@@ -819,13 +830,15 @@ void OceanModel::runFlags() {
     at("walkOpenAt", [](OceanModel& m) {
         if (m.tree && !m.tree->focused) m.tourOpens(m.tree->root);
     });
-    at("walkHoldNextAt", [](OceanModel& m) {
-        std::optional<int> next = m.tourNode(m.teach.tour + 1);
-        if (next && m.tourHolds(*next)) {
-            logLine("[cards] a long pinch on the next lesson's card, by flag");
-            m.take(*next);
-        }
-    });
+    for (const char* name : {"walkHoldNextAt", "walkHoldNextAgainAt"}) {
+        at(name, [](OceanModel& m) {
+            std::optional<int> next = m.tourNode(m.teach.tour + 1);
+            if (next && m.tourHolds(*next)) {
+                logLine("[cards] a long pinch on the next lesson's card, by flag");
+                m.take(*next);
+            }
+        });
+    }
     at("deckAt", [](OceanModel& m) { m.touchHologramByFlag(Flags::integer("deckPick")); });
     // A launch argument can't be negative: `-panLeft` and `-panDown` are the other way.
     at("panAt", [](OceanModel& m) {

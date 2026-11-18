@@ -1124,7 +1124,7 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     // Is this lesson finished? Pulling is only half of its lesson: the other half is being back on its card.
     bool finished = teach.tourDone[at];
     if (at == 0) finished = false;                                              // (its doing is the taking of the next card)
-    if (at == pullStep) finished = teach.tourBeat >= 1 && here && !(teach.demo && Flags::has("guideBeat"));
+    if (at == pullStep) finished = (teach.tourBeat >= 2 || (teach.tourBeat >= 1 && here)) && !(teach.demo && Flags::has("guideBeat"));
     // (A lesson of talking to Momo is done on the layer Momo answered with.)
     bool result = tourOnResult();
     if (tourSteps[at].result[0]) finished = here && result;
@@ -1179,7 +1179,8 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     static const double autoAfter = Flags::has("guideAutoAfter") ? Flags::number("guideAutoAfter") : 5;
     bool hers = at == momoStep || at == markStep;
     double doneSince = hers ? std::max({teach.tourAdvanceAt, teach.answerEnds, teach.askedUntil}) : teach.tourAdvanceAt;
-    if (passing && !zoomed && !busy && !holdDone && now - doneSince >= (canPinchNext ? autoAfter : 4.0)) {
+    // (From whatever layer they stand on, an earlier lesson's too: the next card is taken where it is, WS103.)
+    if (passing && !zoomed && !busy && !holdDone && now - doneSince >= autoAfter) {
         if (std::optional<int> next = tourNode(at + 1)) {
             take(*next);
             return;
@@ -1310,7 +1311,8 @@ void OceanModel::updateTour(double now, Vec3 eye) {
         words = at + 1 >= tourCount ? "Done" : canPinchNext ? fmt("Done. Point at card %d, pinch and hold until the ring fills", at + 2) : fmt("Done. Step %d opens in a moment", at + 2);
         toNext = true;
     } else if (at == pullStep && teach.tourBeat >= 1) {
-        words = here ? "" : "Now push it away to come back";
+        // (Pulled back, and waiting for the push: said on whatever layer they stand, WS103.)
+        words = "Now push it away to come back";
     } else if (!here) {
         words = lesson < at ? fmt("Step %d is ahead: push your closed hand away", at + 1) : fmt("Back to the walk: point at card %d, pinch and hold until the ring fills", at + 1);
     } else {
@@ -1475,7 +1477,12 @@ void OceanModel::tourDid(const std::string& did, float amount) {
     if (!onWelcomeTree()) return;
     if (did == "ask") teach.tourTook = true;
     if (did == "carry") teach.tourCarried += amount;
-    if (did == "step" && teach.tour == pullStep) teach.tourBeat = 1;
+    // WS103: the pull-and-push lesson: pulled back (beat 1), then pushed forward at least once, wherever the push lands
+    // (beat 2, done). A long pull steps two layers back, and one push one forward: nobody is left on an earlier layer.
+    if (did == "step" && teach.tour == pullStep) {
+        if (amount > 0) teach.tourBeat = std::max(teach.tourBeat, 1);
+        else if (teach.tourBeat >= 1) teach.tourBeat = 2;
+    }
     for (int k = 0; k < tourCount; k++) {
         if (teach.tourDone[k] || did != tourSteps[k].did) continue;
         if (did == "carry" && teach.tourCarried < 0.1f) continue;
