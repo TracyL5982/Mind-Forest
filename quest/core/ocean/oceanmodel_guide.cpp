@@ -2197,7 +2197,7 @@ void OceanModel::showSheet(int row) {
     }
     x += closeWidth + 0.01f;
     x += guideWords(holder, art->line("Take the tour", Art::Size::label, Font::Weight::medium, Color::white(), Art::ink, Art::buttonPad), x, foot, false, Act::tour) + 0.01f;
-    guideWords(holder, art->line("Start the guide over", Art::Size::label, Font::Weight::medium, Color::white(1, 0.8f), Art::ink, Art::buttonPad), x, foot, false, Act::startOver);
+    // (WS103, the user: "Start the guide over" stood here too and did the same to the eye: one of the two was to go.)
     const float size = 0.62f, middle = 0.2f;
     // Here a gesture is something to look at, not to copy in place: the one made toward and away from you
     // is turned a little, so that its depth shows.
