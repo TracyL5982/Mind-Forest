@@ -405,8 +405,8 @@ export function lessonNote(lesson: Extract<DeviceFrame, { t: 'lesson' }>): strin
   return [
     "[Welcome walk] The user is on the welcome walk, the app's guided tour, in the lesson where they mark part of a picture and ask you about it.",
     `The picture: ${lesson.picture}`,
-    ...(cards ? [`As you answer, the lesson's own cards come up round them:\n${cards}`] : []),
-    `Answer what they say in a sentence or two, from the picture. Then walk them through ${cards ? 'those cards' : 'what they marked'} in a few words${cards ? ' each' : ''}. Start no search and no tree, and call no tool: the walk's cards are already there.`,
+    ...(cards ? [`For you to know, not to speak of: the lesson's own cards come up round them as you answer:\n${cards}`] : []),
+    'Answer their question, from the picture, and nothing more: three short sentences at the most, and one or two is better. Do not describe, list or mention the cards or anything that arrives, and do not say what you will do next. Start no search and no tree, and call no tool: the walk\'s cards are already there.',
   ].join('\n');
 }
 
