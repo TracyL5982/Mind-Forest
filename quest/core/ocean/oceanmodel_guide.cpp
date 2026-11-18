@@ -1125,11 +1125,15 @@ void OceanModel::updateTour(double now, Vec3 eye) {
 
     // WS103: the pull lesson's safety net: pulled back and no push for 15 s, the walk takes them back to step 3's layer itself,
     // and the lesson counts as done.
-    if (at == pullStep && teach.tourBeat == 1 && teach.tourPulledAt >= 0 && now - teach.tourPulledAt >= 15 && !busy) {
+    // (The user's, WS103: "let's go with your 15 seconds": on to step 4 from wherever they stand, step 3 done.)
+    if (at == pullStep && teach.tourBeat == 1 && teach.tourPulledAt >= 0 && now - teach.tourPulledAt >= 15) {
         teach.tourBeat = 2;
-        if (std::optional<int> back = tourNode(pullStep)) {
-            logLine("[guide] pulled back and no push for 15 s: back to step 3 by itself");
-            take(*back);
+        teach.tourDone[pullStep] = true;
+        if (std::optional<int> next = tourNode(pullStep + 1)) {
+            logLine("[guide] pulled back and no push for 15 s: on to step 4 by itself");
+            // (Card 4 lies folded onto card 3 off step 3's layer: through that layer, and on into card 4's.)
+            if (std::optional<int> three = tourNode(pullStep)) take(*three);
+            take(*next);
             return;
         }
     }
@@ -1192,7 +1196,8 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     bool hers = at == momoStep || at == markStep;
     double doneSince = hers ? std::max({teach.tourAdvanceAt, teach.answerEnds, teach.askedUntil}) : teach.tourAdvanceAt;
     // (From whatever layer they stand on, an earlier lesson's too: the next card is taken where it is, WS103.)
-    if (passing && !zoomed && !busy && !holdDone && now - doneSince >= autoAfter) {
+    // (A hand held closed, or a pinch held, defers it, but only 10 s more: a hand resting in a fist never holds the walk.)
+    if (passing && !zoomed && (!busy || now - doneSince >= autoAfter + 10) && !holdDone && now - doneSince >= autoAfter) {
         if (std::optional<int> next = tourNode(at + 1)) {
             take(*next);
             return;

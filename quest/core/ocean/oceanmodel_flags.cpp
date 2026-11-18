@@ -805,7 +805,10 @@ void OceanModel::runFlags() {
         m.moveLayer(-1);
         m.guideDid("step", -1);
     });
-    at("placeAt", [](OceanModel& m) { m.carryOne(); });
+    at("placeAt", [](OceanModel& m) {
+        m.carryOne();
+        m.guideDid("move");                 // (as a card carried and let go tells the guide)
+    });
     // `-carryAt t` carries the cover `-carry <i>` (the first, if not given) along the shelf,
     // drawn `-carryRight` and `-carryUp` metres.
     at("carryAt", [](OceanModel& m) {
@@ -842,7 +845,9 @@ void OceanModel::runFlags() {
     at("deckAt", [](OceanModel& m) { m.touchHologramByFlag(Flags::integer("deckPick")); });
     // A launch argument can't be negative: `-panLeft` and `-panDown` are the other way.
     at("panAt", [](OceanModel& m) {
-        m.panByFlag(Vec2{float(Flags::number("panX") - Flags::number("panLeft")), float(Flags::number("panY") - Flags::number("panDown"))});
+        Vec2 d{float(Flags::number("panX") - Flags::number("panLeft")), float(Flags::number("panY") - Flags::number("panDown"))};
+        m.panByFlag(d);
+        m.guideDid("carry", length(d));     // (as a closed hand's pan tells the guide)
     });
     at("panAgainAt", [](OceanModel& m) { m.panByFlag(Vec2{float(Flags::number("panAgainX")), float(Flags::number("panAgainY"))}); });
     at("sendAt", [](OceanModel& m) { m.pressTree(true); });
