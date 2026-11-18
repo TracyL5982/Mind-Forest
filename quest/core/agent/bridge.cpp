@@ -1083,6 +1083,12 @@ bool Bridge::addPiece(const Ref& ref) {
 void Bridge::tellMore(int nodeID, const std::string& question) {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
     if (!p || !p->service.count(nodeID) || question.empty()) return;
+    // WS89: what is marked on it is still being cut out: the question goes once it has gone, so the Scout is shown it.
+    if (looking.count(p->service[nodeID])) {
+        askAfterLook[p->service[nodeID]] = {nodeID, question};
+        logLine("[agent] the question waits for what is marked to be cut out: " + question);
+        return;
+    }
     if (!asking.begin(p->service[nodeID], question, now)) {
         logLine("[agent] still asking, so not again: " + question);
         return;
@@ -1202,6 +1208,7 @@ void Bridge::see(const std::optional<NodeId>& nodeId, const std::string& title, 
     };
     auto made = std::make_shared<Made>();
     std::weak_ptr<Pictures> alive = pictures;
+    if (nodeId) looking.insert(nodeId->value);
     Async::run(
         [made, read = std::move(read), lines = std::move(lines), box] {
             ImageRef picture = read();
@@ -1218,12 +1225,20 @@ void Bridge::see(const std::optional<NodeId>& nodeId, const std::string& title, 
         },
         [this, alive, made, nodeId, title] {
             if (alive.expired()) return;
-            if (!made->seen) {
+            if (made->seen) {
+                client.send(Outbound::look(nodeId, title, made->seen));
+                logLine("[agent] Momo is shown what is marked on " + title + " (" + made->sizes + ")");
+            } else {
                 logLine("[agent] what is marked on " + title + " could not be cut out, so Momo is not shown it");
-                return;
             }
-            client.send(Outbound::look(nodeId, title, made->seen));
-            logLine("[agent] Momo is shown what is marked on " + title + " (" + made->sizes + ")");
+            if (!nodeId) return;
+            looking.erase(nodeId->value);
+            // A Send asked while it was being cut out goes now, after it.
+            auto waiting = askAfterLook.find(nodeId->value);
+            if (waiting == askAfterLook.end()) return;
+            auto [localId, question] = waiting->second;
+            askAfterLook.erase(waiting);
+            tellMore(localId, question);
         });
 }
 

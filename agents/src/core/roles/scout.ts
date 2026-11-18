@@ -112,6 +112,8 @@ interface Run {
   brief: string;
   /** The nearest picture at or above the anchor, for the model to look at. */
   picture?: string;
+  /** The part of the anchor's picture the user drew a line round (WS89), shown before the picture: what was asked is about it. */
+  marked?: string;
 }
 
 /**
@@ -139,7 +141,10 @@ export const scout: Roles['scout'] = async (given, input) => {
   const item = ctx.mind.itemOf(anchor.id);
   const need = oneLine(input.need ?? '', 400);
   const reading = oneLine(input.reading ?? '', 400);
-  const run: Run = { anchor, item, need, reading, brief: describe(ctx, anchor, item, need, reading, input.history ?? []), picture: await pictureFor(ctx, anchor) };
+  const run: Run = {
+    anchor, item, need, reading, brief: describe(ctx, anchor, item, need, reading, input.history ?? []), picture: await pictureFor(ctx, anchor),
+    ...(input.marked ? { marked: input.marked } : {}),
+  };
   const wanted = Math.max(1, Math.floor(input.count ?? ctx.settings.picksPerRun));
   // Nothing the run brings may repeat what the tree holds, except that what the user already has may take the place of the same thing brought new.
   const seen = new Set(treeKeys(ctx.mind, anchor.treeId).keys());
@@ -481,7 +486,13 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
     system: SYSTEM,
     user: [
       run.brief,
-      ...(run.picture ? ['The picture is attached. Look at it closely: subject, composition, palette, style, mood, small details.'] : []),
+      ...(run.marked
+        ? [
+            `The user drew a line round part of the card's picture, in red. The first image attached is that part, cut out${run.picture ? '; the second is the whole picture' : ''}. What they asked is about what is inside the line: say in reading what that is, and let every direction be about it, not the picture as a whole.`,
+          ]
+        : run.picture
+          ? ['The picture is attached. Look at it closely: subject, composition, palette, style, mood, small details.']
+          : []),
       '',
       asked,
       '',
@@ -531,7 +542,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
       ...ctx.tools.sources.list().map(sourceLine),
     ].join('\n'),
     schema: Ideas,
-    images: run.picture ? [run.picture] : undefined,
+    images: run.marked || run.picture ? [run.marked, run.picture].filter((image): image is string => Boolean(image)) : undefined,
     // Minimal effort writes them in 11 to 15 s instead of 19 to 25, but two blind readers ranked its directions below these on every card.
     effort: 'low',
     onText: (soFar) => {

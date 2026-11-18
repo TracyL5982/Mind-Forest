@@ -209,6 +209,10 @@ private:
     void fetchPictures(const std::string& noteID);
     /// Where a picture fetched from the service is kept.
     static std::string pictureFile(const std::string& src);
+    /// The service cards whose look is being made, and a Send asked of one meanwhile: it goes once the look has gone, so the
+    /// Scout is shown the part ringed (WS89).
+    std::set<std::string> looking;
+    std::map<std::string, std::pair<int, std::string>> askAfterLook;
     /// Cuts out what `lines` mark on the picture `read` gives, off the frame thread, and sends it (`look`).
     void see(const std::optional<NodeId>& nodeId, const std::string& title, std::function<ImageRef()> read, std::vector<std::vector<Vec2>> lines, float box);
     void fetchPicture(const std::string& src);

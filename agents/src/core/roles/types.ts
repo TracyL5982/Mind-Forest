@@ -178,6 +178,11 @@ export interface Roles {
       count?: number;
       /** The recent conversation, so a need is read in context. */
       history?: Turn[];
+      /**
+       * The part of the anchor's picture the user drew a line round, as a JPEG data URL with the line on it (WS89): what was
+       * asked is about what is inside the line.
+       */
+      marked?: string;
       deliver?: (commands: Command[]) => void;
     },
   ): Promise<Command[]>;

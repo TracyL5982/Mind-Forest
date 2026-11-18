@@ -418,6 +418,26 @@ test('the model is shown the picture the user dropped, also when asked about a c
   assert.deepEqual(shown, [['data:image/png;base64,BwcH'], ['data:image/png;base64,BwcH']]);
 });
 
+test('a request about the part of a picture the user drew round shows the model that part first, and asks every direction to be about it', async () => {
+  const k = kit();
+  const tree = k.seedTree('Road', ['Car on a winding road']);
+  const dropped = await k.assets.put(new Uint8Array([7, 7, 7]), 'image/png');
+  const root = k.mind.itemOf(tree.nodeIds[0]!);
+  Object.assign(root, { kind: 'image', source: { ...root.source, asset: dropped.id } });
+  const shown: { images?: string[]; user: string }[] = [];
+  k.model.on('scout.ideate', (req) => {
+    shown.push({ images: req.images, user: req.user });
+    return { reading: '', directions: [NOTE] };
+  });
+  const marked = 'data:image/jpeg;base64,/9j/AAAA';
+
+  await scout(k.ctx, { anchor: tree.nodeIds[0]!, need: 'Tell me more about this part: the part I drew on', marked });
+
+  assert.deepEqual(shown[0]!.images, [marked, 'data:image/png;base64,BwcH'], 'the part, then the whole picture');
+  assert.match(shown[0]!.user, /drew a line round part of the card's picture, in red\. The first image attached is that part, cut out; the second is the whole picture\. What they asked is about what is inside the line/);
+  assert.doesNotMatch(shown[0]!.user, /The picture is attached\./);
+});
+
 test('the request and the conversation reach the model with the card they are about', async () => {
   const { k, anchor } = setup();
   let prompt = '';

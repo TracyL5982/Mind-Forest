@@ -19,7 +19,7 @@ import { LiveVoice, RATE, type LiveOptions, type OpenRealtime, type VoiceFrame }
 import { copyOf, plantingOf, SHARE_BYTES, SHARE_CARDS, type ShareAnswer, type SharedFile, type TreeCopy } from '../core/sharing.ts';
 import { Gifts, type GiftPace } from './gifts.ts';
 import type { Maps } from './geocoder.ts';
-import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
+import { ClientMessage, DeviceFrame, PROTOCOL_VERSION, type Look } from './protocol.ts';
 import { SPEECH_VOICE, HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, heardMs, spokenMs, questWavMs, type Speak, type Transcribe } from './speech-openai.ts';
 import { checkName } from './wake-check.ts';
 import type { WebAnswer } from './web-answer.ts';
@@ -251,6 +251,8 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   const connections = new Map<string, WebSocket>();
   /** The live voice of the device on each connection, once its `/live` socket names it. */
   const voices = new Map<WebSocket, LiveVoice>();
+  /** What each connection last marked on a picture (`look`, WS89), until its next look or until it closes: in memory only. */
+  const looks = new Map<WebSocket, Look>();
   /**
    * Who the work under way was started by: a connection's message or its device's live voice. Its changes and navigates are marked
    * `yours` to that connection alone, and its voice hears what the work does.
@@ -978,6 +980,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, maps, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser', live: Boolean(opts.live), connection, ...(sharing && !director ? { share: 'telegram' } : {}) }));
     ws.on('close', () => {
       sockets.delete(ws);
+      looks.delete(ws);
       plays.delete(ws);
       connections.delete(connection);
       voices.delete(ws);
@@ -1010,8 +1013,10 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         else gifts?.returned(m.away);
         return;
       case 'look':
-        // What the user marked on a picture, for Momo to see with their next words about it: kept by this headset's voice
-        // alone, in memory, and never written to the log or the store.
+        // What the user marked on a picture, for Momo to see with their next words about it, and for the Scout when they send
+        // it: kept for this connection alone, in memory, and never written to the log or the store.
+        if (m.crop) looks.set(ws, m);
+        else if (!m.nodeId || looks.get(ws)?.nodeId === m.nodeId) looks.delete(ws);
         voices.get(ws)?.look(m);
         return;
       case 'share':
@@ -1044,7 +1049,9 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       case 'more': {
         const why = meter?.refused('searches');
         if (why) return decline(ws, why);
-        await (m.t === 'ask' ? pipeline.ask(m.nodeId, m.need) : pipeline.more(m.nodeId, m.need));
+        // An ask about a card the user drew on (its Send) is about the part they ringed: the Scout is shown it.
+        const marked = m.t === 'ask' && looks.get(ws)?.nodeId === m.nodeId ? looks.get(ws)?.crop : undefined;
+        await (m.t === 'ask' ? pipeline.ask(m.nodeId, m.need, marked) : pipeline.more(m.nodeId, m.need));
         return;
       }
       case 'keep':

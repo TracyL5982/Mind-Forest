@@ -212,9 +212,10 @@ export class Pipeline {
   }
 
   /** A typed or picked question about a card. It joins the conversation, as a spoken one does. What it brings joins the card's round, and the picks least related to the question make room. */
-  ask(anchor: Id, need: string): Promise<void> {
+  /** `marked`: the part of the card's picture the user drew a line round, which the request is about (a JPEG data URL). */
+  ask(anchor: Id, need: string, marked?: string): Promise<void> {
     this.history.push({ who: 'user', text: need });
-    return this.runScout(anchor, need);
+    return this.runScout(anchor, need, undefined, marked);
   }
 
   more(anchor: Id, need?: string): Promise<void> {
@@ -448,7 +449,7 @@ export class Pipeline {
    * Every run is one the user asked for, so when it ends the agent says what it brought, and brings the card into view unless
    * the user has turned to something else since asking.
    */
-  private async runScout(anchor: Id, need: string | undefined, reading?: string): Promise<void> {
+  private async runScout(anchor: Id, need: string | undefined, reading?: string, marked?: string): Promise<void> {
     const { mind } = this.deps;
     if (!mind.nodes.has(anchor)) return;
     const run = (this.scoutRun.get(anchor) ?? 0) + 1;
@@ -470,7 +471,7 @@ export class Pipeline {
           brought.push(...newNodeIds(set).filter((id) => mind.nodes.get(id)?.parent === anchor));
           this.afterContent(set);
         };
-        bring(await this.deps.roles.scout(this.ctx, { anchor, need, reading, history: this.history.slice(-6), deliver: bring }));
+        bring(await this.deps.roles.scout(this.ctx, { anchor, need, reading, history: this.history.slice(-6), ...(marked ? { marked } : {}), deliver: bring }));
       }, request, true);
     } catch (err) {
       this.fail('scout', err);

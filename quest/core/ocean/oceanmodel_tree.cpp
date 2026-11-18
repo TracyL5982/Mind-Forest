@@ -832,7 +832,14 @@ void OceanModel::pickTool(int id, int what) {
         if (c && c->ref.kind == Ref::Kind::note && c->ref.id.rfind("welcome", 0) == 0) {
             if (teach.tour >= 0 && onWelcomeTree()) tourSend(); else stepOut();
         }
-        else if (c && agentBridge && agentBridge->editable(id)) agentBridge->tellMore(id, tellMoreAbout(*c));
+        else if (c && agentBridge && agentBridge->editable(id)) {
+            // AGENT (WS89): a line drawn a moment ago is cut out now, and the question waits for it, so the Scout is shown it.
+            if (lookDue && lookDue->first == id) {
+                lookDue.reset();
+                seeMarks(*c);
+            }
+            agentBridge->tellMore(id, tellMoreAbout(*c));
+        }
         else askMark(id);
         return;
     }

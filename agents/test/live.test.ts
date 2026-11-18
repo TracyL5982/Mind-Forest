@@ -709,6 +709,40 @@ test("a headset's look at what the user marked reaches its own voice alone, and 
   }
 });
 
+test("Send on a card the user drew on shows the Scout the part ringed; another card's, or after the marks are gone, shows it nothing", async () => {
+  const asked: { anchor: string; marked?: string }[] = [];
+  const run = await startServer({
+    port: 0, host: '127.0.0.1', clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), token: 'secret', dataDir: tempDir('mp-send-look-'),
+    roles: { ...fakeRoles, scout: async (_ctx, input) => (asked.push({ anchor: input.anchor, ...(input.marked ? { marked: input.marked } : {}) }), []) },
+  });
+  try {
+    await run.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: Sourdough rises slowly in winter' }]);
+    await run.pipeline.idle();
+    const tree = [...run.mind.trees.values()][0]!;
+    const card = tree.rootId;
+    const got: { t: string }[] = [];
+    const ws = new WebSocket(`${run.url.replace('http', 'ws')}/ws?token=secret`);
+    ws.on('message', (raw) => got.push(JSON.parse(String(raw))));
+    for (let i = 0; i < 400 && !got.some((m) => m.t === 'hello'); i++) await new Promise((r) => setTimeout(r, 5));
+    const ask = async (nodeId: string) => {
+      const had = asked.length;
+      ws.send(JSON.stringify({ t: 'ask', nodeId, need: 'Tell me more about this part: the part I drew on' }));
+      for (let i = 0; i < 400 && asked.length === had; i++) await new Promise((r) => setTimeout(r, 5));
+      return asked.at(-1);
+    };
+    ws.send(JSON.stringify({ t: 'look', nodeId: card, title: 'Sourdough', box: [0.1, 0.1, 0.5, 0.5], crop: jpeg('the crust'), whole: jpeg('the loaf') }));
+    assert.deepEqual(await ask(card), { anchor: card, marked: jpeg('the crust') }, 'the part ringed goes with the Send');
+    ws.send(JSON.stringify({ t: 'look', nodeId: 'another-card', title: 'Rye', box: [0.1, 0.1, 0.5, 0.5], crop: jpeg('rye'), whole: jpeg('rye loaf') }));
+    assert.deepEqual(await ask(card), { anchor: card }, "another card's mark does not");
+    ws.send(JSON.stringify({ t: 'look', nodeId: card, title: 'Sourdough', box: [0.1, 0.1, 0.5, 0.5], crop: jpeg('the crust'), whole: jpeg('the loaf') }));
+    ws.send(JSON.stringify({ t: 'look', nodeId: card, title: 'Sourdough' }));
+    assert.deepEqual(await ask(card), { anchor: card }, 'nor marks that are gone');
+    ws.close();
+  } finally {
+    await run.close();
+  }
+});
+
 test("the service refuses /live without a live voice; with one, what Momo starts is the named connection's own, and Momo walks through its cards", async () => {
   const dataDir = tempDir('mp-live-');
   const base = { port: 0, host: '127.0.0.1', clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret' };
