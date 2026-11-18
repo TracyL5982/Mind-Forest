@@ -26,9 +26,9 @@ import { momentAt, takeOf, type Mode, type Take, type TimedLine } from './take.t
  *   cards that land and what Momo says, each at the moment it would come in a real round. The page's Play, or the round's line
  *   said in the headset, runs it; it can be paused, and moved to any moment, where the tree is made to stand as it stood then.
  *
- * Nothing of the live system is changed by it but what the Scout brings, the questions offered under a round's card, the
- * Renderer, which is given nothing to choose because each card comes with its look, and Momo's voice, which says the take's
- * written lines from their recordings in place of words of her own.
+ * Nothing of the live system is changed by it but what the Scout brings, the questions offered under a round's card (and the
+ * pills under a diagram the user steps through), the Renderer, which is given nothing to choose because each card comes with its
+ * look, and Momo's voice, which says the take's written lines from their recordings in place of words of her own.
  */
 
 /**
@@ -135,6 +135,8 @@ export interface DirectorDeps {
   lines: Lines;
   /** Sends the headset a piece of Momo's voice, as the live voice does. False when no headset has its voice open. */
   momo?: (frame: VoiceFrame) => boolean;
+  /** Sends the headsets the pills under a card, as they are sent when it opens: one with that card open shows them at once. */
+  offer?: (nodeId: Id, pills: string[]) => void;
   /**
    * Starts the app again on the headset, joined to this service as before, and resolves with a line for the log. A headset
    * keeps a tree standing after the service deletes it, so this is the only way to an empty stage there. Absent where the host
@@ -303,6 +305,8 @@ export class Director {
   private saying = 0;
   /** When each of her recorded lines that is being said now ends on the headset, by its id: a line stopped is over. */
   private readonly voicing = new Map<string, number>();
+  /** The pills tapped under each card the user steps through (`states`), by its node, since the card was hung there. */
+  private readonly stepped = new Map<Id, Set<string>>();
 
   constructor(private readonly deps: DirectorDeps) {
     this.pace = { ...PACE, ...deps.pace };
@@ -321,7 +325,9 @@ export class Director {
     const kept: Record<string, { id: string; size: number; at: number }> = existsSync(record) ? JSON.parse(readFileSync(record, 'utf8')) : {};
     // A file's name is its place: the script's own by name, a showcase tree's as `<tree>/<name>`.
     const files = new Map<string, string>();
-    for (const phase of this.script.phases) for (const card of phase.cards) for (const file of [card.image, card.video]) if (file) files.set(file, join(this.deps.mediaDir, file));
+    for (const phase of this.script.phases) {
+      for (const card of phase.cards) for (const file of [card.image, card.video, ...(card.states ?? []).map((state) => state.image)]) if (file) files.set(file, join(this.deps.mediaDir, file));
+    }
     for (const { tree, mediaDir } of this.shows) for (const card of tree.cards) if (card.image) files.set(`${tree.id}/${card.image}`, join(mediaDir, card.image));
     let stored = 0;
     const missing: string[] = [];
@@ -1286,6 +1292,71 @@ export class Director {
     return this.answers.some((answer) => answer.armed() && answer.take(words, focus));
   }
 
+  // ---- the made diagrams the user steps through
+
+  /** The card of the script a node holds, when it is one the user steps through with pills (`states`). */
+  private stepping(nodeId: Id): ScriptCard | undefined {
+    for (const [id, node] of this.nodes) {
+      if (node !== nodeId) continue;
+      for (const phase of this.script.phases) for (const card of phase.cards) if (card.id === id && card.states) return card;
+    }
+    return undefined;
+  }
+
+  /**
+   * The pills under a card the user steps through (`states`), or null for any other card. A round asked from the card offers its
+   * own questions in their place once the user has tapped every state, or while it is the round to play next, so that it can
+   * still be started with a pill (the lead's call, 2026-11-18). A round said aloud on the card plays as ever.
+   */
+  pills(nodeId: Id): string[] | null {
+    const card = this.stepping(nodeId);
+    if (!card?.states) return null;
+    const round = this.script.phases.find((phase) => phase.head === card.id && !this.built.has(phase.id) && phase.offers.length > 0);
+    const tapped = this.stepped.get(nodeId);
+    const through = card.states.every((state) => tapped?.has(state.pill));
+    if (round && (through || round === this.script.phases[this.armed])) return round.offers.slice(0, 4);
+    return card.states.map((state) => state.pill);
+  }
+
+  /**
+   * A pill tapped under a card the user steps through: the card shows that state's picture in place, and that is all. No round
+   * is played and Momo says nothing. True when it was one; any other ask goes on as ever, to the Scout.
+   *
+   * The headset takes a tapped pill as a question asked: it shows the words as the user's, takes the pill away, and asks
+   * nothing more about it until a search for it ends. So the change is made as a short step of the Scout's on the card, which
+   * ends the wait, and the pills are sent again once it is over.
+   */
+  step(nodeId: Id, need: string): boolean {
+    const card = this.stepping(nodeId);
+    const state = card?.states?.find((one) => plain(one.pill) === plain(need));
+    if (!card || !state || !this.deps.mind.nodes.has(nodeId)) return false;
+    const media = this.media.get(state.image);
+    if (!media) {
+      this.deps.log(`[demo] "${card.title}" has no stored picture ${state.image} for "${state.pill}"`);
+      return true;
+    }
+    const { pipeline } = this.deps;
+    const node = this.deps.mind.node(nodeId);
+    const view = { ...node.view, props: { ...node.view.props, src: media.url } };
+    const tapped = this.stepped.get(nodeId) ?? new Set<string>();
+    this.stepped.set(nodeId, tapped.add(state.pill));
+    const shown = Math.min(600, this.pace.step / 2);
+    // Momo is told nothing of the step: it is no search of hers to tell of.
+    this.quiet = Math.max(this.quiet, Date.now() + shown + 500);
+    this.deps.log(`[demo] "${card.title}" shows "${state.pill}"`);
+    void pipeline.ctx
+      .step('scout', `Showing “${state.pill}”`, async () => {
+        pipeline.stage(DEMO, `Demo: ${card.title}, ${state.pill}`, [{ type: 'setView', id: nodeId, view }]);
+        await pause(shown);
+      }, { nodeId, detail: need })
+      .catch(() => {})
+      .then(() => {
+        const pills = this.pills(nodeId);
+        if (pills && this.deps.mind.nodes.has(nodeId)) this.deps.offer?.(nodeId, pills);
+      });
+    return true;
+  }
+
   // ---- the roles the demo takes over
 
   /** The Scout, scripted while rounds are left: the round the request fits, brought as a run brings its picks. */
@@ -1379,6 +1450,7 @@ export class Director {
     this.nodes.clear();
     this.built.clear();
     this.playing.clear();
+    this.stepped.clear();
     this.listening = null;
     this.at = null;
     this.leading.clear();
@@ -1539,6 +1611,7 @@ export class Director {
       const id = `d${this.round}-${card.id}`;
       commands.push({ type: 'addNode', node: nodeOf(card, item, { id, treeId, parent, status, order: order + n, rank: rank + n }, making) });
       this.nodes.set(card.id, id);
+      this.stepped.delete(id);
       n++;
     }
     return commands;

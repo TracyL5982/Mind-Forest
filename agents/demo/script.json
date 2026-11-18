@@ -693,7 +693,21 @@
      "kind": "picture",
      "image": "gen-idea-time.jpg",
      "w": 800,
-     "h": 640
+     "h": 640,
+     "states": [
+      {
+       "pill": "First ask",
+       "image": "gen-idea-time-first.jpg"
+      },
+      {
+       "pill": "Then",
+       "image": "gen-idea-time-then.jpg"
+      },
+      {
+       "pill": "Now",
+       "image": "gen-idea-time.jpg"
+      }
+     ]
     },
     {
      "id": "priestley-chart",
@@ -742,7 +756,21 @@
      "kind": "picture",
      "image": "gen-idea-branches.jpg",
      "w": 800,
-     "h": 640
+     "h": 640,
+     "states": [
+      {
+       "pill": "Teal branch",
+       "image": "gen-idea-branches-teal.jpg"
+      },
+      {
+       "pill": "Gold branch",
+       "image": "gen-idea-branches-gold.jpg"
+      },
+      {
+       "pill": "Violet branch",
+       "image": "gen-idea-branches-violet.jpg"
+      }
+     ]
     },
     {
      "id": "sea-fan",
@@ -773,7 +801,17 @@
      "kind": "picture",
      "image": "gen-idea-depth.jpg",
      "w": 800,
-     "h": 640
+     "h": 640,
+     "states": [
+      {
+       "pill": "Bring the earlier layer forward",
+       "image": "gen-idea-depth-earlier.jpg"
+      },
+      {
+       "pill": "Back to now",
+       "image": "gen-idea-depth.jpg"
+      }
+     ]
     },
     {
      "id": "multiplane-camera",

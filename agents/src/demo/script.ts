@@ -47,6 +47,11 @@ export const ScriptCard = z.object({
   items: z.array(z.string()).optional(),
   /** Lines the user drew on the card: each a run of x then y, 0 to 1 across and down the opened card. */
   mark: z.array(z.array(z.number().min(0).max(1))).optional(),
+  /**
+   * A made diagram the user steps through: the pills offered under the card, each showing its picture of the media folder in the
+   * card's place (`scripts/demo-diagrams.ts` draws them). The card lands showing `image`, its first state.
+   */
+  states: z.array(z.object({ pill: z.string().min(1), image: z.string().min(1) })).min(1).max(3).optional(),
 });
 export type ScriptCard = z.infer<typeof ScriptCard>;
 

@@ -185,6 +185,13 @@ A stray request therefore also brings the next round. If that happens, go to the
 
 **Pruning Llull's ring.** Once Round 2 has brought Llull's ring, cutting it on the headset (with the knife, or the card's own cut) has Momo say "Got it—pruning that branch and shifting focus to spatial hierarchy." from her recording (`said.pruned` in `lines.json`), once each time the round is set up. Asking her instead ("prune this", "cut this branch", "remove Llull's ring", with the card open or named) cuts it the same way and says the same line. Her own answer and her own tool are left out. To tell, her answers wait until your words are written down, at most 2 s, from when the round brings the card until it is cut. If she is saying a take's line when you cut, the line about pruning waits for it to end. Only a cut of the card itself counts, not a cut above it. With "Rounds are scripted" off, she answers for herself.
 
+**Stepping through Round 3's diagrams** (the user's choice, 2026-11-18). By time, By branches and By depth each have pills under them, one for each state of the diagram: "First ask", "Then" and "Now"; "Teal branch", "Gold branch" and "Violet branch"; "Bring the earlier layer forward" and "Back to now". Tapping a pill on the headset turns the card to that picture in place, and that is all. No round plays, no card comes and Momo says nothing. The Scout's label "Showing “Then”" shows for half a second on the card, since the headset waits for a search to end before it lets the same pill be tapped again. Then the pills come back, the one tapped among them.
+
+- **Rounds asked from these cards.** By branches is the card "Tree branches" (f2) is asked from, and By depth the card "Easy to get lost" (f1) is asked from. Their states show first. The round's own two questions come back in their place once every state has been tapped, or while that round is the next to play, so that it can still be started with a pill. Right after Round 3, f1 is the next to play, so By depth shows f1's questions until f1 has played.
+- **Saying it aloud.** Said aloud with the card open, a request still plays its round as ever.
+- **Going back to a round.** **Go to this round** sets every card up again at its first state, the picture it lands with.
+- **On the headset.** The headset takes a tapped pill as a question asked about the card. It keeps the card if it was a suggestion, and the first tap lifts the card to a layer of its own, open there, as any question asked on a card does.
+
 Momo's own rule is that a question gets an answer and no cards, and half the walkthrough's lines are questions ("so how do we keep the information organized?"). So while a round waits on the card you have open, she is told so at the start of your turn, and takes whatever you say next as a request for a new layer on it: a few words of her own, then the search. On any other card she is herself: a question is answered aloud, and a request for things to look at brings the next round.
 
 ## When something is off
@@ -250,6 +257,7 @@ Everything the demo shows is in two places:
 
 - `agents/demo/script.json`: the rounds in recording order. Each has `head` (the card it is asked from: a card of an earlier round, or `root`), `say`, `do`, `offers`, an optional `ask` (an offered question that plays it), and `cards`. A card has `kind` (picture, artwork, paper, film, note, link, facts, person, list), `origin` (`ocean` for your own things, `external`, `generated`), `title`, `text` (one or two sentences: Momo tells the user this, and it is a picture's caption), and where it has them `by`, `date`, `from`, `href`, `image`, `w`, `h`.
 - `agents/demo/media/`: one picture per card, and one film.
+- A card's `states` are the pills of a diagram the user steps through, each with its picture: `{ "pill": "Then", "image": "gen-idea-time-then.jpg" }`. The card lands showing its `image`, its first state, and three pills at most fit under it. Round 3's three diagrams are drawn in all their states by `node --no-warnings --import tsx scripts/demo-diagrams.ts` from `agents`, which writes them into `media/`. Change a picture there, not by hand, so that every state stays the same diagram.
 
 Edit `script.json` by hand for small changes, then start the service again. Two rules the service holds a tree to: no two cards with the same title, and no two with the same address (`href`).
 
