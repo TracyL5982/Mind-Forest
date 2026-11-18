@@ -20,7 +20,7 @@ import { Overflow, Paused, SPARE_EFFORTS, SPARE_MODEL, SPARE_QUICK_MODEL, spareC
 import { openInstagram } from './instagram.ts';
 import { openaiSearch, SEARCH_DOLLARS } from './search-openai.ts';
 import { ownBot, ownerSecret } from './telegram.ts';
-import type { LinesOptions } from '../demo/lines.ts';
+import { savedLine, type LinesOptions } from '../demo/lines.ts';
 import { record as recordLine } from '../demo/momo-voice.ts';
 import { loadScript } from '../demo/script.ts';
 import { loadShowcase } from '../demo/showcase.ts';
@@ -264,6 +264,8 @@ if (ledger) {
     madeLimit: number('MIND_PALACE_FILES_MB_PER_DEVICE', 60) * 1e6,
     record,
     judgeBot: judgeToken ? { token: judgeToken } : undefined,
+    // Momo's line as a tree a friend shared grows: the film's own recording, which the image ships (Dockerfile).
+    sharedLine: savedLine(join(root, 'demo'), 'shared') ?? undefined,
     // deploy/deploy.sh says which: judging, with fly.toml's limits, or testing, with deploy/testing.env's.
     mode: env.MIND_PALACE_LIMITS_MODE || 'judging',
     log,

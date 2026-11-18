@@ -98,6 +98,7 @@ A client fetches only from the service. Every address in an item or a view that 
 | `settings` | `settings` | Settings changed. |
 | `note` | `role`, `message` | A log line. Optional to show. |
 | `error` | `message` | The last message from this client was rejected. |
+| `shared` | `tree`, `ok`, `reason?`, `text?` | The answer to `share` on the hosted service. `ok: true`: a copy of the tree was taken and the bot posted a link to forward to the chat paired with this headset; the tree stays here. Otherwise `reason` is `unpaired` (no Telegram is paired with this headset), `limit` (20 shares a day), `too-big` (over 400 cards or 25 MB of files) or `unavailable`, with a line in `text` the client may show. |
 | `questions` | `nodeId`, `questions` | The reply to this connection's own `questions` message, sent to it alone. See Suggested questions below. |
 
 `origin` on a change set is `{by: 'user' | 'agent', role?, tool?}`. Use it to animate agent changes differently from the user's own.
@@ -145,6 +146,8 @@ The picks of a run arrive in several `change` sets before its `say`: what the us
 | `commands` | `label`, `commands` | Direct manipulation: any commands from `src/core/domain.ts`, such as `moveNode`, `editItem`, `deleteNode`, and `addEdit` and `removeEdit` for a card's highlights and lines (see Edits on a card). Applied as one undoable set. |
 | `organize` | `request`, `scope`, `focus?` | A typed organizing request. `scope` is `{treeIds, nodeIds}`. |
 | `handoff` | `scope`, `note?` | Package a handoff. An empty scope means everything. |
+| `share` | `tree` | Share a tree with a friend who uses Mind Forest too. On the hosted service a copy of its kept cards and their files is taken, answered by `shared`, and the bot posts the sharer's paired chat a link to forward. A friend who opens it in their own paired chat gets the copy in their forest, under new ids: it grows the next time their headset joins, or sends `worn` after 5 s or more off, as their own tree (its first card in a `change` marked `yours`, then a layer at a time), with Momo's recorded line for it on `/live`. The demo server instead takes a showcase tree out of the forest and grows it back on the same headset (the film); any other service answers `error`. |
+| `worn` | `away` | The headset was put on again, still connected, after `away` seconds off. A tree waiting to grow here (a demo's daily or shared tree, or one a friend shared) grows when `away` is 5 or more. |
 | `settings` | `patch` | `picksMode` (`provisional` or `immediate`), `picksPerRun`, `scoutOnDump`, `agentName` (1 to 32 characters: a letter, then letters, digits, spaces, hyphens or apostrophes). |
 | `client` | `media` | What this connection can play, sent right after connecting: `{embeds, files}`. `embeds` is false for a client that cannot show a player from another site, such as the headset. `files` lists the file extensions it plays, such as `["mp4", "mp3"]`. A connection that never sends it is taken to be a browser that shows embeds. While any connected client cannot show embeds, the Scout looks for each video as a file that plays from the service first, and leaves out recordings whose type a connected client did not list. |
 

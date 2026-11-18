@@ -11,6 +11,8 @@ import { BOT_API } from '../telegram.ts';
 import { forDevice, LINES, type Ledger } from './ledger.ts';
 import { JudgeTelegram, type JudgeBotOptions } from './judges.ts';
 import { DeviceModel } from './overflow.ts';
+import { Shares, SHARES_PER_DAY } from './shares.ts';
+import type { GiftPace } from '../gifts.ts';
 
 /** A device names itself with an id it made on first launch. */
 const DEVICE = /^[A-Za-z0-9_-]{16,64}$/;
@@ -81,8 +83,20 @@ export interface HostedOptions {
   judgeBot?: Omit<JudgeBotOptions, 'log'>;
   /** A line in Momo's voice as 16-bit mono PCM at the live voice's rate, for a refusal said without the realtime model. */
   record?: (text: string) => Promise<Uint8Array>;
+  /**
+   * Momo's line as a tree a friend shared grows in a headset, recorded in her realtime voice (16-bit mono PCM at the live voice's
+   * rate): demo/lines.json's `said.shared`. Without it the tree grows unsaid.
+   */
+  sharedLine?: { text: string; pcm: Uint8Array };
+  /** How a shared tree grows; tests run it fast. */
+  sharePace?: Partial<GiftPace>;
   log: (line: string) => void;
 }
+
+/** What a headset is told when it shares a tree it cannot share now. */
+const SHARE_UNPAIRED = 'Pair Telegram first: say “Momo, connect my Telegram”, and the link to share comes there.';
+const SHARE_LIMIT = `You’ve shared ${SHARES_PER_DAY} trees today. Share more tomorrow.`;
+const SHARE_FAILED = 'Sharing didn’t work just now. Try again in a moment.';
 
 export interface Hosted {
   url: string;
@@ -157,10 +171,48 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
     recorded,
   });
 
+  /** Trees shared from the headsets, waiting under their codes for a friend to open the link: only with the judges' bot. */
+  const shares = opts.judgeBot ? new Shares(join(opts.dataDir, 'shares'), opts.judgeBot.now) : null;
   /** A chat's message opens only the space of a device that has one: Telegram never makes a device. */
   const judges = opts.judgeBot
-    ? new JudgeTelegram({ ...opts.judgeBot, file: join(opts.dataDir, 'judge-telegram.json'), log: note, open: async (device) => known.has(device) && !('error' in (await spaceOf(device))) })
+    ? new JudgeTelegram({
+        ...opts.judgeBot,
+        file: join(opts.dataDir, 'judge-telegram.json'),
+        log: note,
+        open: async (device) => known.has(device) && !('error' in (await spaceOf(device))),
+        shares: shares ?? undefined,
+        // A friend opened a shared tree's link in their paired chat: their space copies it in and holds it.
+        gift: async (device, code) => {
+          const found = shares?.find(code);
+          if (found?.state !== 'live') return { ok: false, why: 'the link no longer works.' };
+          const space = known.has(device) ? await spaceOf(device) : { error: 'your headset has no space here yet.' };
+          if ('error' in space) return { ok: false, why: space.error.endsWith('.') ? space.error : `${space.error}.` };
+          return space.receiveShared(code, found.copy, found.files);
+        },
+      })
     : null;
+
+  /** How a device's space shares a tree: through the judges' bot, to the chat paired with it, as a link to forward. */
+  const sharingFor = (device: string): ServerOptions['sharing'] =>
+    judges && shares
+      ? {
+          share: async (copy, files) => {
+            if (!judges.paired(device)) return { ok: false, reason: 'unpaired', text: SHARE_UNPAIRED };
+            if (shares.today(device) >= SHARES_PER_DAY) return { ok: false, reason: 'limit', text: SHARE_LIMIT };
+            if (volumeFull()) return { ok: false, reason: 'unavailable', text: SHARE_FAILED };
+            const code = shares.make(device, copy, files);
+            if (!(await judges.offer(device, copy.title, code))) {
+              shares.drop(code);
+              return { ok: false, reason: 'unavailable', text: SHARE_FAILED };
+            }
+            note(`[shared] ${short(device)} shared a tree of ${copy.nodes.length} cards and ${files.length} files`);
+            return { ok: true };
+          },
+          planted: (code) => void judges.planted(code).catch((err) => note(`[shared] the sharer could not be told: ${String(err)}`)),
+          line: opts.sharedLine,
+          pace: opts.sharePace,
+        }
+      : undefined;
 
   async function spaceOf(device: string): Promise<Space | { status: number; error: string }> {
     await closing.get(device);
@@ -184,7 +236,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       const why = ledger.held(device);
       return why ? LINES[why] : null;
     });
-    const space = openSpace({ ...spaceOptions(opts, device), model, volumeFull, meter: meterOf(device), uploads, contact: judges?.channel(device), log: (line) => note(`[${short(device)}] ${line}`) });
+    const space = openSpace({ ...spaceOptions(opts, device), model, volumeFull, meter: meterOf(device), uploads, contact: judges?.channel(device), sharing: sharingFor(device), log: (line) => note(`[${short(device)}] ${line}`) });
     open.set(device, { space, last: Date.now() });
     space.catch((err) => {
       open.delete(device);
@@ -209,6 +261,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
   }
 
   const sweep = setInterval(() => {
+    shares?.sweep();
     for (const [device, entry] of open) {
       void entry.space.then((space) => {
         if (space.online() > 0 || Date.now() - entry.last < idleMs || open.get(device) !== entry) return;
