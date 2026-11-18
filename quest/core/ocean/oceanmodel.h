@@ -395,8 +395,7 @@ private:
         EntityRef buttons;
         double buttonsUntil = -1;
         double hoverSeen = -1;              // when a ray last rested on it
-        std::array<EntityRef, 2> pills;     // the two buttons as drawn, and their size: for the pressed look
-        float pillScale = 1;
+        std::array<EntityRef, 2> pills;     // the two buttons as drawn, for the pressed look
         Tween<float> el{0.f};
         // How far its pictures are drawn in to the trunk and how small (1: as the cover was made), and the
         // rings on the ground round its foot.
@@ -711,6 +710,8 @@ private:
     void closeHome();
     /// The guide's buttons as pinched: one that a pinch lands on (a guide pick's `action`) shows pressed until it lets go.
     bool pressButton(const EntityRef& entity, int action);
+    /// The pressed look itself, on any button (AGENT: the forest's Send and Share too): until `releaseButton`.
+    void showPressed(const EntityRef& entity);
     void releaseButton();
     /// How far what is drawn flat on a guide holder reaches on it, in its own x and y.
     std::pair<Vec2, Vec2> guideExtent(const EntityRef& holder) const;
@@ -1614,8 +1615,6 @@ private:
 
     /// (`pick(for:)`)
     std::optional<Pick> pick(const EntityRef& entity) const;
-    /// AGENT: whether a point (where a pinch has moved to) is on the target of the button a pinch began on.
-    bool onCoverButton(const Pick& pick, Vec3 point) const;
 
 public:
     void pinchChanged(const EntityRef& entity, Vec3 point, Vec3 start) override;

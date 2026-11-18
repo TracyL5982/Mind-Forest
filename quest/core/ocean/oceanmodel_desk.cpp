@@ -539,16 +539,6 @@ void OceanModel::tendHover(double now) {
         logLine("[ocean] Send and Share over " + shelf[size_t(most)].tree->title);
         showing = most;
     }
-    // A pinch held on one shows it pressed: a little dimmer and smaller (as the guide's buttons do).
-    if (showing >= 0) {
-        Shelved& s = shelf[size_t(showing)];
-        for (int k = 0; k < 2; k++) {
-            if (!s.pills[size_t(k)]) continue;
-            bool held = press && !press->cancelled && press->pick.kind == Pick::Kind::coverButton && press->pick.index == s.uid && press->pick.question == k;
-            s.pills[size_t(k)]->opacity = held ? std::optional<float>(0.7f) : std::nullopt;
-            s.pills[size_t(k)]->scale = Vec3::repeating(s.pillScale * (held ? 0.96f : 1.f));
-        }
-    }
 }
 
 void OceanModel::showButtons(Shelved& s, int pressed) {
@@ -600,8 +590,7 @@ void OceanModel::showButtons(Shelved& s, int pressed) {
             }
         }
         EntityRef pill = art->quad(*piece);
-        s.pillScale = pillTall / piece->size.y;
-        pill->scale = Vec3::repeating(s.pillScale);
+        pill->scale = Vec3::repeating(pillTall / piece->size.y);
         pill->position = {x, 0, 0.004f};
         row->addChild(pill);
         s.pills[size_t(b)] = pill;
@@ -614,19 +603,6 @@ void OceanModel::showButtons(Shelved& s, int pressed) {
     touch(time + 0.3);
     logLine(fmt("[ocean] Send and Share over %s: each a target %.0f° by %.0f°, its pill %.0f° tall, at %.2f m, on the crown", s.tree->title.c_str(),
                 double(targetWide), double(targetTall), double(buttonTall), double(d)));
-}
-
-bool OceanModel::onCoverButton(const Pick& pick, Vec3 point) const {
-    auto i = std::find_if(shelf.begin(), shelf.end(), [&](const Shelved& cover) { return cover.uid == pick.index; });
-    if (i == shelf.end() || !i->buttons) return false;
-    for (const EntityRef& target : i->buttons->children) {
-        auto p = picks.find(target.get());
-        if (p == picks.end() || p->second.kind != Pick::Kind::coverButton || p->second.question != pick.question || target->collision.empty()) continue;
-        Vec3 at = target->convertFrom(point, nullptr);
-        Vec3 half = target->collision.front().size * 0.5f;
-        return std::fabs(at.x) <= half.x && std::fabs(at.y) <= half.y;
-    }
-    return false;
 }
 
 void OceanModel::coverButton(int uid, int which) {

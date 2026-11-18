@@ -1534,15 +1534,19 @@ bool OceanModel::pressButton(const EntityRef& entity, int action) {
     default:
         return false;
     }
+    showPressed(entity);
+    logLine(fmt("[guide] a button shows pressed (%d)", action));
+    return true;
+}
+
+void OceanModel::showPressed(const EntityRef& entity) {
     releaseButton();
     // (Still coming in: it shows whole at once, then pressed.)
     fades.erase(std::remove_if(fades.begin(), fades.end(), [&](const Fade& f) { return f.entity == entity; }), fades.end());
     teach.pressed = entity;
     teach.pressedScale = entity->scale;
-    logLine(fmt("[guide] a button shows pressed (%d)", action));
     entity->opacity = pressedOpacity;
     entity->scale = entity->scale * pressedScale;
-    return true;
 }
 
 void OceanModel::releaseButton() {
