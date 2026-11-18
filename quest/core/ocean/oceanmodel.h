@@ -1384,6 +1384,9 @@ private:
     void stand(TreeRef t);
 
     void startBrief(int i);
+    /// AGENT: what the forest offers to ask Momo, with no tree open, while joined to the service: said to her as they
+    /// stand. (The user's picks, 2026-11-18. The library's own questions are for its own trees, when not joined.)
+    static const std::vector<std::string>& momoQuestions();
 
     /// Runs `next` once no tree stands: at once, or after the standing one
     /// has pressed itself back onto the shelf.

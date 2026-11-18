@@ -957,7 +957,11 @@ void OceanModel::rebuildStrip() {
         holder->orientation = stage.facing(holder->position);
         // One left edge for the heading and every brief under it.
         std::vector<std::optional<Piece>> briefs;
-        for (const Brief& b : catalog->briefs) briefs.push_back(art->brief("“" + b.line + "”"));
+        if (agentBridge) {
+            for (const std::string& asked : momoQuestions()) briefs.push_back(art->brief("“" + asked + "”"));
+        } else {
+            for (const Brief& b : catalog->briefs) briefs.push_back(art->brief("“" + b.line + "”"));
+        }
         std::optional<float> widest;
         for (const std::optional<Piece>& piece : briefs) {
             if (piece) widest = widest ? std::max(*widest, piece->size.x) : piece->size.x;
