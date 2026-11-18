@@ -67,7 +67,6 @@ android {
         }
         create("judge") {
             initWith(getByName("release"))
-            applicationIdSuffix = ".judge"
             signingConfig = signingConfigs.getByName("judge")
             manifestPlaceholders["appLabel"] = "Mind Forest"
             externalNativeBuild { cmake { arguments += "-DCMAKE_BUILD_TYPE=Release" } }
@@ -105,10 +104,12 @@ android {
 
 androidComponents {
     onVariants(selector().withBuildType("judge")) { variant ->
+        // Its own id, with nothing of the development builds' in it: what the store keeps for good.
+        variant.applicationId.set("com.mindforest.app")
         val version = judging.getProperty("version", "1").toInt()
         variant.outputs.forEach {
             it.versionCode.set(version)
-            it.versionName.set("$version (judging)")
+            it.versionName.set("1.0.$version")
         }
     }
 }
