@@ -12,7 +12,7 @@ It is a native OpenXR app for the headset ([quest/](quest/README.md)) and a Type
 
 This is the judging build, one app named "Mind Forest" that joins the hosted service by itself. Hands only, no controllers.
 
-1. **Open the app and allow the microphone and the room.** The app asks for the microphone so you can talk to Momo. The first time you raise a hand it asks to see the room, so the scene can sit at your real desk. Refused, it sits at an assumed desk, and typing and picking still work without the microphone.
+1. **Open the app and allow the room, then the microphone.** The first time you raise a hand the app asks to see the room, so the scene can sit at your real desk; refused, it sits at an assumed desk. It asks for the microphone when you first need it, at the lesson where you talk to Momo. If you refuse or miss that window, Momo shows a crossed-out microphone: pinch her and choose **Allow microphone**. Picking still works without it.
 2. **Take the welcome tree.** On a first launch one tree stands alone, "Welcome to Mind Forest". Its eight cards are lessons, each played by a hand drawn on the card:
    - pinch a card;
    - grab to pan;
@@ -30,6 +30,8 @@ This is the judging build, one app named "Mind Forest" that joins the hosted ser
 6. **Connect Telegram, hand off, share.** Say "connect my Telegram" and Momo gives you a bot's name and a six-digit code. After that, anything you send the bot lands in your forest. Point at a tree on the desk and two buttons appear: Send posts the tree's handoff file to your chat, and Share posts a link that grows a copy of the tree in a friend's forest.
 
 Hold your palms together for a second to close the tree you are in.
+
+**The welcome tree afterwards.** The welcome tree is the lesson itself and is not kept in your forest: once you put it away it is gone, and your own trees and the four example trees stand on the desk. To see a gesture again, pinch the **Gestures** button, which lists them all. To take the whole welcome tree again, pinch **Start the guide over** on that sheet.
 
 ## The hackathon's experience guidelines
 
