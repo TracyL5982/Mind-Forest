@@ -84,14 +84,16 @@ test('going to a round builds every round before it, kept, and leaves it the nex
   try {
     await run.demo!.goto('n3');
     const built = before('n3');
-    assert.deepEqual(built.map((phase) => phase.id), ['r1', 'n2']);
+    assert.deepEqual(built.map((phase) => phase.id), ['r1', 'n2', 'mo']);
     const wanted = built.flatMap((phase) => phase.cards).length;
     assert.equal(run.mind.trees.size, 1);
     assert.equal(run.mind.nodes.size, wanted + 1);
     assert.ok([...run.mind.nodes.values()].every((node) => node.status === 'kept'));
-    assert.equal(run.demo!.status().armed, 2);
-    // Round 2 hangs from the film Round 1 brought, as the script says, and Round 3 waits on the Neurones poster with nothing under it.
+    assert.equal(run.demo!.status().armed, 3);
+    // Round 2 hangs from the film Round 1 brought, as the script says, More of this from A disc of pictures, and Round 3 waits on the
+    // Neurones poster with nothing under it.
     assert.deepEqual(titlesUnder(run, 'Slice of Heartland').sort(), cardsOf('n2').map((card) => card.title).sort());
+    assert.deepEqual(titlesUnder(run, 'A disc of pictures').sort(), cardsOf('mo').map((card) => card.title).sort());
     assert.deepEqual(titlesUnder(run, 'Neurones poster'), []);
     // The card's look is chosen with it: a paper is a reference, a picture carries its shape.
     const paper = nodeOf(run, 'Virtual memory palaces: immersion aids recall')!;
@@ -121,7 +123,7 @@ test('a request on the card a round is asked from plays that round as the Scout 
     assert.deepEqual(landed.map((node) => run.mind.item(node.itemId).title).sort(), cardsOf('n3').map((card) => card.title).sort());
     assert.ok(landed.every((node) => node.status === 'pick'), 'a round that is played lands as picks, so Momo tells of them');
     assert.equal(run.demo!.status().rounds.find((round) => round.id === 'n3')!.state, 'played');
-    assert.equal(run.demo!.status().armed, 3);
+    assert.equal(run.demo!.status().armed, 4);
     await new Promise((r) => setTimeout(r, 50));
     const steps = seen.filter((m) => m.t === 'activity' && m.activity!.role === 'scout' && m.activity!.state === 'start').map((m) => m.activity!.label);
     assert.ok(steps.includes('Checking what you already have'), steps.join(' | '));
@@ -264,14 +266,14 @@ test('Momo is told, with where the user is, when the next words said on the open
   const run = await boot();
   try {
     await run.demo!.goto('n3');
-    const ring = nodeOf(run, 'Llull’s ring')!;
-    assert.match(run.demo!.takeNote(ring.id), /^\nRecording: .*new layer/);
+    const poster = nodeOf(run, 'Neurones poster')!;
+    assert.match(run.demo!.takeNote(poster.id), /^\nRecording: .*new layer/);
     assert.equal(run.demo!.takeNote(nodeOf(run, 'Corals')!.id), '', 'no round waits on this card, so Momo is told nothing more');
     assert.equal(run.demo!.takeNote(undefined), '');
-    await run.pipeline.more(ring.id);
+    await run.pipeline.more(poster.id);
     await run.pipeline.idle();
     await over(run);
-    assert.equal(run.demo!.takeNote(ring.id), '', 'the round was played: the card is an ordinary card again');
+    assert.equal(run.demo!.takeNote(poster.id), '', 'the round was played: the card is an ordinary card again');
     // The one round that brings nothing is answered aloud from its card.
     await run.demo!.goto('bs');
     assert.match(run.demo!.takeNote(nodeOf(run, 'Sources')!.id), /answer aloud/);
