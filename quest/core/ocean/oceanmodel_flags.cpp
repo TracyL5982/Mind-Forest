@@ -209,14 +209,14 @@ void OceanModel::pinchEnded(Vec3 point) {
     if (!still && button && time - p.began < buttonQuickly) {
         std::optional<Pick> under = over ? pick(over) : std::nullopt;
         if (!under || under->kind == Pick::Kind::background ||
-            (under->kind == Pick::Kind::guide && (under->index == p.pick.index || under->index == guideOffButtons))) {
+            (under->kind == Pick::Kind::guide && (under->index == p.pick.index || under->index == guideOffButtons || under->index == pairPanel))) {
             still = true;
             logLine(fmt("[guide] a pinch on a button (%d) taken: let go within %.1f s, the ray on nothing else", p.pick.index, time - p.began));
         }
     }
     if (button && !still) {
         std::optional<Pick> under = over ? pick(over) : std::nullopt;
-        bool elsewhere = under && under->kind != Pick::Kind::background && !(under->kind == Pick::Kind::guide && under->index == guideOffButtons);
+        bool elsewhere = under && under->kind != Pick::Kind::background && !(under->kind == Pick::Kind::guide && (under->index == guideOffButtons || under->index == pairPanel));
         logLine(fmt("[guide] a pinch on a button (%d) let go: not taken, the ray had left it (%.0f cm, %.1f s%s)", p.pick.index, double(std::max(moved, p.reach)) * 100,
                     time - p.began, elsewhere ? ", on something else" : ""));
     }

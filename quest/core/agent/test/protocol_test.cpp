@@ -19,6 +19,7 @@ std::string kindOf(const Inbound& message) {
                           [](const Questions&) { return std::string("questions"); },
                           [](const Rejected&) { return std::string("error"); },
                           [](const Shared&) { return std::string("shared"); },
+                          [](const Telegram&) { return std::string("telegram"); },
                           [](const Unknown& u) { return "unknown " + u.t; },
                           [](const Malformed& m) { return "malformed " + m.t + ": " + m.why; },
                       },
@@ -384,6 +385,17 @@ TEST(theOtherMessagesRead) {
     Inbound refused = parseInbound(R"({"t":"shared","tree":"t1","ok":false,"reason":"unpaired","text":"Pair Telegram first."})");
     auto* no = std::get_if<Shared>(&refused);
     CHECK(no && !no->ok && no->reason == "unpaired" && no->text == "Pair Telegram first.", "shared, refused");
+    // (WS99: a made-up code, as everywhere in tests: a real one is a secret while it works.)
+    Inbound unpaired = parseInbound(R"({"t":"telegram","paired":false})");
+    auto* bare = std::get_if<Telegram>(&unpaired);
+    CHECK(bare && !bare->paired && bare->code.empty() && bare->bot.empty() && bare->ready, "telegram: not paired");
+    Inbound coded = parseInbound(R"({"t":"telegram","paired":false,"bot":"a_bot","code":"000000","expiresIn":600})");
+    auto* withCode = std::get_if<Telegram>(&coded);
+    CHECK(withCode && !withCode->paired && withCode->bot == "a_bot" && withCode->code == "000000" && withCode->expiresIn == 600, "telegram: a code to pair with");
+    Inbound paired = parseInbound(R"({"t":"telegram","paired":true})");
+    CHECK(std::get_if<Telegram>(&paired) && std::get_if<Telegram>(&paired)->paired, "telegram: paired");
+    Inbound waiting = parseInbound(R"({"t":"telegram","paired":false,"ready":false})");
+    CHECK(std::get_if<Telegram>(&waiting) && !std::get_if<Telegram>(&waiting)->ready, "telegram: the bot not ready yet");
     Inbound note = parseInbound(R"({"t":"note","role":"scout","message":"failed: no network"})");
     auto* n = std::get_if<Note>(&note);
     CHECK(n && n->role == "scout" && n->message == "failed: no network", "note");
@@ -446,5 +458,7 @@ std::vector<std::pair<Outbound, std::string>> outboundCases() {
          R"({"box":[0.25,0.1235,0.5,1],"crop":"data:image/jpeg;base64,AAAA","nodeId":"n1","t":"look","title":"Night stairs","whole":"data:image/jpeg;base64,BBBB"})"},
         {Outbound::look(std::nullopt, "Woman Reading a Letter", std::nullopt), R"({"t":"look","title":"Woman Reading a Letter"})"},
         {Outbound::share(t1), R"({"t":"share","tree":"t1"})"},
+        // WS99: the pairing panel asks for a code.
+        {Outbound::pair(), R"({"t":"pair"})"},
     };
 }

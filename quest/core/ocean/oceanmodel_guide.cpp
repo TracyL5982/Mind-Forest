@@ -39,7 +39,7 @@ constexpr double layerBeforeAnswerEnds = 2;
 constexpr int exampleTalk = 1000;
 
 // (`offButtons` is OceanModel::guideOffButtons, which pinchEnded reads.)
-enum Act { begin = 100, closeSheet = 101, startOver = 102, openSheet = 103, tour = 104, tourSkip = 105, tourEnd = 106, tourBack = 107, homeClose = 108, tourSay = 109, offButtons = 110, tourSettings = 111, momoNote = 112, allowMicrophone = 113 };
+enum Act { begin = 100, closeSheet = 101, startOver = 102, openSheet = 103, tour = 104, tourSkip = 105, tourEnd = 106, tourBack = 107, homeClose = 108, tourSay = 109, offButtons = 110, tourSettings = 111, momoNote = 112, allowMicrophone = 113, pairClose = 114, pairPanel = 115 };
 // The gestures a ghost hand teaches, in the order they are needed, and how long each waits once its moment has come.
 struct Plan {
     const char* id;
@@ -1768,6 +1768,7 @@ bool OceanModel::pressButton(const EntityRef& entity, int action) {
     case Act::tourSettings:
     case Act::momoNote:
     case Act::allowMicrophone:
+    case Act::pairClose:
         break;
     default:
         return false;
@@ -2047,6 +2048,16 @@ void OceanModel::microphonePicks(const EntityRef& momo, const EntityRef& allow) 
 
 void OceanModel::guideAct(int action) {
     static_assert(Act::offButtons == guideOffButtons, "pinchEnded reads the act for off the buttons as guideOffButtons");
+    static_assert(Act::pairClose == OceanModel::pairClose && Act::pairPanel == OceanModel::pairPanel, "the pairing panel's acts");
+    // The pairing panel's, whether the guide is on or not (WS99): its X closes it; a pinch elsewhere on it does nothing.
+    if (action == Act::pairClose) {
+        closePairing("its X");
+        return;
+    }
+    if (action == Act::pairPanel) {
+        logLine("[ocean] a pinch on the pairing panel, off its X: nothing");
+        return;
+    }
     // Momo's, while the microphone is off: whether the guide is on or not (WS87).
     if (action == Act::momoNote || action == Act::allowMicrophone) {
         agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr;

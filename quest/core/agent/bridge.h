@@ -64,6 +64,11 @@ public:
     /// The service shares a tree through Telegram (its hello says `"share":"telegram"`, the hosted service): Share sends at
     /// once, with no list of people (the lead, WS88). Otherwise, as on the demo, Share opens the film's list of people.
     bool sharesByTelegram() const { return shareBy == "telegram"; }
+    /// WS99: the service said this headset has no Telegram chat paired (`telegram`, the hosted service): Send and Share say to
+    /// pair first, and the pairing panel opens from them. False where the service says nothing of it (the demo, the Mac's).
+    bool unpairedTelegram() const { return telegramPaired.has_value() && !*telegramPaired; }
+    /// The pairing panel asks for the bot and a code (`pair`); the answer comes as `telegram`. True when it was sent.
+    bool askPairing();
     /// A long pinch on a card of a service tree, open or closed (the user's rule, 2026-11-17): one with cards under it is gone
     /// into, its layer standing, and nothing is asked; one with none starts a layer on it and asks for more like it (`moreLike`).
     void longPinch(int nodeID);
@@ -122,6 +127,9 @@ public:
 private:
     std::string shareBy;            // how the service shares a tree, from its hello (`Hello::share`)
     std::string lastShared;         // the tree last asked to be shared, until its answer
+    std::optional<bool> telegramPaired;     // WS99: whether a Telegram chat is paired, once the service has said
+    /// WS99: what the service says of pairing (`telegram`): to the pairing panel and the buttons. The code is never logged.
+    void telegram(const Telegram& t);
     /// One service tree as the scene holds it.
     struct Planted {
         std::shared_ptr<Tree> tree;

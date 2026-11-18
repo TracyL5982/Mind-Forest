@@ -393,6 +393,9 @@ private:
         double buttonsUntil = -1;
         double hoverSeen = -1;              // when a ray last rested on it
         std::array<EntityRef, 2> pills;     // the two buttons as drawn, for the pressed look
+        /// AGENT (WS99): which of the two says "Pair Telegram first", the service having no Telegram chat paired with this
+        /// headset: a pinch on it then opens the pairing panel. Until the buttons go.
+        std::array<bool, 2> pairFirst{false, false};
         Tween<float> el{0.f};
         // How far its pictures are drawn in to the trunk and how small (1: as the cover was made), and the
         // rings on the ground round its foot.
@@ -508,6 +511,37 @@ private:
     /// AGENT: the hosted service took a share it sends through Telegram: Share says "Sent to your Telegram" for `sharedSay`
     /// s and the tree's copy goes with the wind, as a pick in the film's list does (WS88, the lead).
     void shareTaken(const Tree& tree);
+
+    // MARK: - AGENT: pairing Telegram (oceanmodel_pair.cpp, WS99)
+    /// The service says what it can of pairing this headset with a Telegram chat (`agent::Telegram`): a code, given out by the
+    /// panel's asking or by Momo's "connect my Telegram" (the panel opens with it, if it is not open); the chat paired (the
+    /// panel says so and goes; the buttons say what they say again); or the bot not ready yet. The code is never logged.
+    void pairingCode(const std::string& bot, const std::string& code, int seconds);
+    void telegramPaired();
+    void pairingNotReady();
+    /// A button over a tree says "Pair Telegram first" (`Shelved::pairFirst`): at once for Send (the service says no chat is
+    /// paired), on the service's answer for Share. It stays at least `pairFirstSay` s, and for as long as the buttons do.
+    void sayPairFirst(Shelved& s, int which);
+    static constexpr double pairFirstSay = 4.0;
+    /// The pairing panel: what to do in Telegram, with the bot's name and the code, large. Its X closes it; it closes by
+    /// itself a moment after the chat pairs. It stands on the side away from the tree whose button opened it, or that shows
+    /// its buttons (`side`: 1 right, -1 left, 0 the middle), above the trees' crowns, nearer than the forest, clear of Momo.
+    struct Pairing {
+        EntityRef holder;
+        std::string bot, code;              // (the code is a secret while it works: shown here, never logged)
+        double codeUntil = -1;              // when the code stops working
+        double askedAt = -100;              // when a code was last asked for
+        double connectedAt = -1;            // when the panel came to say the chat is paired; it goes a moment after
+        bool notReady = false;
+        float side = 1;
+        std::vector<const Entity*> picks;
+    };
+    Pairing pairing;
+    static constexpr double pairingConnectedSay = 1.6;      // s "Telegram connected" stays before the panel goes
+    void openPairing(const char* why, float side);
+    void drawPairing();
+    void closePairing(const char* why);
+    void tendPairing(double now);
     /// AGENT: `-hoverCover <i> -hoverCoverAt <s>`: the cover at that place on the shelf counts as hovered from then (for
     /// `-hoverCoverFor <s>`, 6), as a ray resting on it would make it, for pictures and checks.
     int hoverForced = -1;
@@ -904,6 +938,8 @@ private:
     static constexpr double buttonQuickly = 1.0;
     /// The guide's act for a pinch on one of its cards off its buttons, which does nothing (oceanmodel_guide.cpp).
     static constexpr int guideOffButtons = 110;
+    /// WS99: the guide's acts for the pairing panel's X, and for a pinch on the panel off it, which does nothing.
+    static constexpr int pairClose = 114, pairPanel = 115;
     double time = 0.0;
     double busyUntil = 0.0;
     struct Scheduled {

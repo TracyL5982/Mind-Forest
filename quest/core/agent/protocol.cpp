@@ -542,13 +542,19 @@ std::optional<Inbound> readShared(const Json& j, Why& why) {
                              .text = f.optionalString("text").value_or("")});
 }
 
+std::optional<Inbound> readTelegram(const Json& j, Why& why) {
+    Fields f(j, why);
+    return message(f, Telegram{.paired = f.boolean("paired"), .bot = f.optionalString("bot").value_or(""), .code = f.optionalString("code").value_or(""),
+                               .expiresIn = j["expiresIn"].isNull() ? 0 : int(f.whole("expiresIn")), .ready = f.optionalBoolean("ready").value_or(true)});
+}
+
 const std::map<std::string, Reader, std::less<>>& readers() {
     static const std::map<std::string, Reader, std::less<>> table = {
         {"hello", readHello},       {"change", readChange},     {"activity", readActivityMessage},
         {"say", readSay},           {"heard", readHeard},       {"navigate", readNavigate},
         {"handoff", readHandoff},   {"settings", readSettingsMessage},
         {"note", readNote},         {"questions", readQuestions}, {"error", readError},
-        {"shared", readShared},
+        {"shared", readShared},     {"telegram", readTelegram},
     };
     return table;
 }
@@ -719,6 +725,8 @@ Outbound Outbound::settings(const SettingsPatch& patch) {
 }
 
 Outbound Outbound::share(const TreeId& tree) { return Outbound(named("share").set("tree", tree.value)); }
+
+Outbound Outbound::pair() { return Outbound(named("pair")); }
 
 Outbound Outbound::worn(double away) { return Outbound(named("worn").set("away", std::round(away * 10) / 10)); }
 

@@ -52,6 +52,14 @@ inline const std::vector<Line>& micOff() {
     return lines;
 }
 
+inline const std::vector<Line>& x() {
+    static const std::vector<Line> lines{
+        {{18.000f, 6.000f, 6.000f, 18.000f}, false},
+        {{6.000f, 6.000f, 18.000f, 18.000f}, false},
+    };
+    return lines;
+}
+
 // The app's own (not Lucide's): the pen of the marking gesture's diagram.
 inline const std::vector<Line>& marker() {
     static const std::vector<Line> lines{
