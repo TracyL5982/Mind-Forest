@@ -94,6 +94,9 @@ public:
     /// s Momo's words run ahead of her voice, when the service says how long a reply's recording is (a demo take's line).
     /// The user, 2026-11-17: "I'd rather transcript to be a little ahead of realtime speech than being laggy".
     static constexpr double wordsAhead = 0.3;
+    /// The same for her live voice, whose words come from the service a little after the sound they belong to, so they
+    /// are shown further ahead of what has been heard. The user, 2026-11-18: "momo speaks faster than transcription appears".
+    static constexpr double liveAhead = 0.6;
 
     /// nullopt while it does not listen: until the model is ready and sound comes, while the microphone is down, and
     /// for good once the user refuses it.

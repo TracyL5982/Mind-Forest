@@ -1385,7 +1385,7 @@ void Voice::show() {
         // (Hers for the walk is fed a little at a time: the sound come so far is all that is queued.)
         double come = sounding->walk ? double(std::max(sounding->queued.size(), sounding->written)) : double(sounding->written);
         double heard = sounding->length > 0 ? (sounding->from + sounding->played + wordsAhead) / sounding->length
-                       : come > 0 ? sounding->played * sounding->rate / come
+                       : come > 0 ? (sounding->played + liveAhead) * sounding->rate / come
                                   : 0;
         // More audio than words may have come, so what is shown only grows.
         std::string words = revealed(sounding->text, heard);

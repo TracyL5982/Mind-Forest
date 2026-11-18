@@ -1230,7 +1230,7 @@ TEST(presenceFollowsALiveTurn) {
     CHECK(t.voice.presence().searching(), "and the Scout is still at work while Momo speaks: the monocle stays on");
     CHECK(!t.looping(), "the loop stops at once");
     t.serviceSays(R"({"t":"text","id":"r1","text":"Here are three older films with one."})");
-    t.frame(0.5);
+    t.frame(0.2);     // (her live words show `liveAhead` ahead of the sound)
     std::string half = t.voice.presence().momoText;
     CHECK(!half.empty() && half.size() < std::string("Here are three older films with one.").size(), "Momo's words come as they are heard: \"%s\"", half.c_str());
     CHECK(std::fabs(t.voice.presence().level - levelOf(6000 / 32768.f / std::sqrt(2.f))) < 0.02f,
@@ -1271,7 +1271,7 @@ TEST(presenceRevealsWordsWithoutSpacesAWholeCharacterAtATime) {
     const std::string said = "我在找更多关于老地图的东西。";
     t.serviceSays(audioFrame("r1", aSecondOfVoice()));
     t.serviceSays(Json::object().set("t", "text").set("id", "r1").set("text", said).dump());
-    t.frame(0.5);
+    t.frame(0.2);     // (her live words show `liveAhead` ahead of the sound)
     std::string half = t.voice.presence().momoText;
     CHECK(!half.empty() && half.size() < said.size(), "some of it, not all: \"%s\"", half.c_str());
     CHECK(said.compare(0, half.size(), half) == 0 && (uint8_t(said[half.size()]) & 0xC0) != 0x80, "a prefix that ends on a whole character");
