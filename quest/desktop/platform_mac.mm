@@ -4,6 +4,7 @@
 #import <CoreGraphics/CoreGraphics.h>
 #import <Foundation/Foundation.h>
 #import <ImageIO/ImageIO.h>
+#include <mach-o/dyld.h>
 #include <sys/stat.h>
 
 #include <cstdio>
@@ -30,6 +31,19 @@ std::string resourcePath(const std::string& name) {
         : name.rfind("kws/", 0) == 0 ? host::repoRoot + "/quest/vendor/sherpa-onnx/assets/" + name
         : host::repoRoot + "/library/" + name;
     struct stat st;
+    // (FILM: the people a tree can be shared with, in git beside the tree this preview was built from, which may not be
+    // the one `-repo` names for the large media.)
+    if (name.rfind("people/", 0) == 0) {
+        char exe[4096];
+        uint32_t size = sizeof exe;
+        std::string own = _NSGetExecutablePath(exe, &size) == 0 ? std::string(exe) : "";
+        size_t cut = own.rfind('/');
+        for (const std::string& root : {cut == std::string::npos ? std::string(".") + "/../.." : own.substr(0, cut) + "/../..", host::repoRoot}) {
+            path = root + "/media-src/quest/" + name;
+            if (stat(path.c_str(), &st) == 0) return path;
+        }
+        return "";
+    }
     if (stat(path.c_str(), &st) == 0) return path;
     // A note's own picture is asked for by its name alone: it is in library/notes.
     path = host::repoRoot + "/library/notes/" + name;

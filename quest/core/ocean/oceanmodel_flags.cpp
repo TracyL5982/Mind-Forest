@@ -46,6 +46,13 @@ void OceanModel::pinchChanged(const EntityRef& entity, Vec3 point, Vec3 start) {
             auto s = std::find_if(shelf.begin(), shelf.end(), [&](const Shelved& cover) { return cover.uid == p->index; });
             if (s != shelf.end() && p->question >= 0 && p->question < 2 && s->pills[size_t(p->question)]) showPressed(s->pills[size_t(p->question)]);
         }
+        // FILM: a person in the list Share opens shows pressed as a button does; and a pinch on anything but the list and
+        // its tree's buttons shuts the list, as a tap outside a menu does (it still does what it would have done).
+        if (sharing.list && sharing.chosen < 0) {
+            bool own = (p->kind == Pick::Kind::person || p->kind == Pick::Kind::coverButton) && p->index == sharing.uid;
+            if (!own) closePeople(true);
+            else if (p->kind == Pick::Kind::person && p->question >= 0 && p->question < int(sharing.rows.size())) showPressed(sharing.rows[size_t(p->question)].bar);
+        }
     }
     press->at = point;
     if (press->cancelled) return;
@@ -160,19 +167,24 @@ void OceanModel::pinchEnded(Vec3 point) {
     bool still = std::max(moved, p.reach) < 0.035f;
     // AGENT: a button over a tree counts a pinch that began on it and lets go with the ray still on its target, however far the
     // ray went between, as the guide's buttons do (WS73, WS75). And as theirs do, one let go within about a second with the ray
-    // on nothing else that is pinched: on nothing, the backdrop, or the tree the button stands over, since the ray at the
-    // release can't be trusted on the headset (the lead, WS79). One that lets go anywhere else, the other button too, does
-    // nothing.
-    if (p.pick.kind == Pick::Kind::coverButton) {
-        const char* which = p.pick.question == 0 ? "Send" : "Share";
+    // on nothing else that is pinched: on nothing, the backdrop, the tree the button stands over, or the ground of the list
+    // Share opens, since the ray at the release can't be trusted on the headset (the lead, WS79). One that lets go anywhere
+    // else, the other button too, does nothing.
+    // (FILM: and a person in the list Share opens; the same rule for them, another person being something else, WS88. A
+    // pinch on the list's own ground, between them, does nothing.)
+    if (p.pick.kind == Pick::Kind::coverButton || p.pick.kind == Pick::Kind::person) {
+        bool person = p.pick.kind == Pick::Kind::person;
+        if (person && p.pick.question < 0) return;
+        std::string which = person ? fmt("a person (%d)", p.pick.question) : p.pick.question == 0 ? "Send" : "Share";
         std::optional<Pick> under = over ? pick(over) : std::nullopt;
-        bool onIt = under && under->kind == Pick::Kind::coverButton && under->index == p.pick.index && under->question == p.pick.question;
-        bool nothingElse = !under || under->kind == Pick::Kind::background || (under->kind == Pick::Kind::shelf && under->index == p.pick.index);
+        bool onIt = under && under->kind == p.pick.kind && under->index == p.pick.index && under->question == p.pick.question;
+        bool nothingElse = !under || under->kind == Pick::Kind::background ||
+                           (under->index == p.pick.index && (under->kind == Pick::Kind::shelf || (under->kind == Pick::Kind::person && under->question < 0)));
         bool quickly = !still && !onIt && nothingElse && time - p.began < buttonQuickly;
         const char* where = !nothingElse ? "something else" : !under ? "nothing" : under->kind == Pick::Kind::background ? "the backdrop" : "its tree";
-        if (quickly) logLine(fmt("[ocean] a pinch on %s taken: let go within %.1f s, the ray on %s", which, time - p.began, where));
+        if (quickly) logLine(fmt("[ocean] a pinch on %s taken: let go within %.1f s, the ray on %s", which.c_str(), time - p.began, where));
         if (still || onIt || quickly) tap(p.pick);
-        else logLine(fmt("[ocean] a pinch on %s let go: not taken, the ray had left its button (%.0f cm, %.1f s, on %s)", which,
+        else logLine(fmt("[ocean] a pinch on %s let go: not taken, the ray had left it (%.0f cm, %.1f s, on %s)", which.c_str(),
                          double(std::max(moved, p.reach)) * 100, time - p.began, where));
         return;
     }
@@ -296,6 +308,9 @@ void OceanModel::tap(const Pick& pick) {
         break;
     case Pick::Kind::coverButton:
         coverButton(pick.index, pick.question);
+        break;
+    case Pick::Kind::person:        // FILM (the list's own ground, -1, takes the pinch and does nothing)
+        if (pick.question >= 0) sharePerson(pick.index, pick.question);
         break;
     case Pick::Kind::send:
         pressTree(true);
@@ -588,6 +603,15 @@ void OceanModel::runFlags() {
             return;
         }
         m.coverButton(m.shelf[size_t(i)].uid, Flags::string("coverButton").value_or("send") == "share" ? 1 : 0);
+    });
+    // FILM: `-sharePick <n> -sharePickAt <s>`: with the list of people open (`-coverButton share`), the one at that place in
+    // it, from 0, is picked, as a pinch on their row picks them.
+    at("sharePickAt", [](OceanModel& m) {
+        if (!m.sharing.list) {
+            logLine("[film] -sharePickAt: no list of people is open");
+            return;
+        }
+        m.sharePerson(m.sharing.uid, std::max(0, Flags::integer("sharePick")));
     });
     at("bringAt", [](OceanModel& m) {
         if (m.peek) m.bringIn(m.peek->film);

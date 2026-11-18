@@ -838,7 +838,7 @@ private:
     std::optional<int> zoomedFor;
     std::optional<float> magnifyBase;
     struct Pick {
-        enum class Kind { card, speck, peek, brief, shelf, send, putAway, background, ask, askMark, openLink, reseat, stay, guide, tool, thread, cut, coverButton };
+        enum class Kind { card, speck, peek, brief, shelf, send, putAway, background, ask, askMark, openLink, reseat, stay, guide, tool, thread, cut, coverButton, person };
         Kind kind = Kind::background;
         int index = 0;                      // card, ask, askMark, openLink: the card; speck: the piece; brief: which one; shelf: the cover's uid
         int question = 0;                   // ask: which of the card's questions
@@ -862,6 +862,9 @@ private:
         static Pick cut(int child) { return {Kind::cut, child, 0}; }
         /// AGENT: a button over a tree in the forest: `which` 0 Send, 1 Share; `index` the cover's uid.
         static Pick coverButton(int uid, int which) { return {Kind::coverButton, uid, which}; }
+        /// FILM: someone in the list that Share opens over a tree (oceanmodel_share.cpp): `who` their place in it, from 0;
+        /// -1 is the list's own ground, which takes a pinch that misses a row. `index` the cover's uid.
+        static Pick person(int uid, int who) { return {Kind::person, uid, who}; }
     };
     // (Keyed by the entity's address: ObjectIdentifier.)
     std::map<const Entity*, Pick> picks;
@@ -937,6 +940,61 @@ public:
     /// light that is KEPT (0.88 unless said). What is returned here is the share REMOVED, 1 - v,
     /// which is what PalaceScene asks for; 0 leaves the room alone.
     float surroundingsDim() override;
+
+private:
+    // MARK: - FILM: sharing a tree with someone (oceanmodel_share.cpp)
+    /// The list of people that Share opens over a tree in the forest, and the one of them the tree was shared with.
+    struct Sharing {
+        int uid = -1;                       // the cover it hangs from
+        EntityRef list;
+        struct Row {
+            EntityRef target, bar;          // what a ray lands on, and the person as drawn on it
+            float size = 1;                 // how large the person is drawn, at rest: larger under a ray
+            float rest = 0;                 // its place in the list, m up from the list's middle in the cover's own measure
+            Tween<float> rise{0.f};         // how far above its place it is, the same measure
+            Tween<float> alpha{1.f};
+        };
+        std::vector<Row> rows;
+        int chosen = -1;                    // who it was shared with, once it was
+        std::string with;                   // and their name, which the Share button then says
+        bool forced = false;                // opened by `-coverButton share`: it stays without a ray on it
+    };
+    Sharing sharing;
+    /// s the buttons and the list stay with no ray on them or their tree, while the list is open: longer than the buttons'
+    /// own `hoverGrace`, for a hand that drifts off as it reads the names.
+    static constexpr double peopleGrace = 2.5;
+    /// The square buttons over a tree, Send to Agents and Share with Friends, side by side, and the people Share opens under
+    /// it, sized by the eye, degrees at the tree's distance: how tall a button is and its target; how far apart the two are;
+    /// how large a person's picture is, and from the middle of one to the middle of the next.
+    static constexpr float actionTall = 3.f, actionReach = 5.f, actionGap = 0.6f, faceTall = 3.6f, facePitch = 4.4f;
+    /// The colour of each of the two, and of its letters when it is filled with it. (Kai, 2026-11-17: "Avoid the purple color.")
+    static Color actionAccent(int which) { return which == 0 ? Art::hot : color(Tone::craft); }
+    static Color actionOn(int which) { return which == 0 ? Color::white() : ink(Tone::craft); }
+    /// What each of the two says, and once it has done its work.
+    std::string actionWords(const Shelved& s, int which, bool done) const;
+    /// A copy of a shared tree's light on its way off: it lifts from the tree, and the wind takes it.
+    struct Drift {
+        EntityRef entity;
+        Vec3 from;                          // where the tree's foot is, in the scene
+        Quat facing;
+        float size = 1;
+        Vec3 up, wind, across;              // the way up, the way the wind blows, and across it
+        double start = 0;
+        float seed = 0;
+    };
+    std::vector<Drift> drifts;
+    /// m of a cover's own measure that a degree takes at its crown, seen from where you sit; and how high its crown is.
+    float coverDegree(const Shelved& s, float& crown) const;
+    /// Brings something that hangs from a cover toward your eyes, and makes it smaller by as much: the same to the eye.
+    void bringNearer(const Shelved& s, const EntityRef& e) const;
+    void openPeople(Shelved& s);
+    /// The list goes, all of it at once. `redraw`: its tree's Share button is drawn as it was before the list opened.
+    void closePeople(bool redraw);
+    void sharePerson(int uid, int who);
+    void driftOff(const Shelved& s);
+    void tendShare(double now);
+
+public:
 
     void start() override;
 

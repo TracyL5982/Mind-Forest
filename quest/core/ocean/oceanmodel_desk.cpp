@@ -522,9 +522,12 @@ void OceanModel::tendHover(double now) {
     // when the tree is no longer the service's (a tree shared is taken out of the forest at once, and its cover stays).
     if (showing >= 0) {
         Shelved& s = shelf[size_t(showing)];
-        bool on = s.mover->entity->hovered > 0.05f || (s.hoverSeen >= 0 && now - s.hoverSeen < hoverGrace);
+        // (FILM: longer while its list of people is open.)
+        double grace = sharing.list && sharing.uid == s.uid ? peopleGrace : hoverGrace;
+        bool on = s.mover->entity->hovered > 0.05f || (s.hoverSeen >= 0 && now - s.hoverSeen < grace);
         if (!((served(s) && on) || (!forestDown && now < s.buttonsUntil))) {
             logLine("[ocean] Send and Share go from " + s.tree->title);
+            if (sharing.uid == s.uid) closePeople(false);       // FILM: the list of people goes with them
             for (const EntityRef& b : s.buttons->children) picks.erase(b.get());
             s.tilts.erase(std::remove(s.tilts.begin(), s.tilts.end(), s.buttons), s.tilts.end());
             fadeOut(s.buttons, 0.2f);
@@ -550,27 +553,45 @@ void OceanModel::showButtons(Shelved& s, int pressed, const std::string& said) {
         s.tilts.erase(std::remove(s.tilts.begin(), s.tilts.end(), s.buttons), s.tilts.end());
         s.buttons->removeFromParent();
     }
-    // Sized by the eye, at the tree's distance: each button's target 12 by 6 degrees, the two side by side and touching, so a
-    // ray between or just round them lands on the nearer one; each pill 4 degrees tall within its target. The targets sit
-    // on the tree's crown, a little toward you, in front of its pictures. (The lead's aims: at least 6 by 12 degrees, the
-    // pills larger, down by the crown. The figures are mine.)
+    // FILM: Kai, 2026-11-17, of the two pills tracy/agents had here (each a target 12 by 6 degrees, side by side on the crown):
+    // "The pill shaped send and share buttons don't fit too well with our design otherwise. Please switch to square design
+    // with colored accents. On the buttons, they should say: Send to Agents and Share with Friends"; and of a first version
+    // that stood them one above the other: "The buttons should still sit side by side." So each is a dark rectangle as wide
+    // as its words, with a bar of its colour down its left edge, as a brief is: the accent for what is sent, green for
+    // friends. Sized by the eye, at the tree's distance: `actionTall` degrees tall, `actionGap` apart, the pair centred over
+    // the trunk; their targets `actionReach` tall, a degree past each outer end, and meeting half way between the two, so a
+    // ray between them is on the nearer. They stand on the crown, a little toward you, in front of the tree's pictures.
     float k = std::max(1e-3f, s.mover->scale.target());
     float crown = s.foot + (s.treeFoot + float(s.layers - 1) * s.treeRise) * coverTree;
     float d = std::max(0.5f, distance(stage.origin, s.mover->position.target() + stage.u * (crown * k)));
     float degree = std::tan(float(M_PI) / 180) * d / k;          // m of the tree's own measure that a degree takes there
-    float wide = targetWide * degree, tall = targetTall * degree, pillTall = buttonTall * degree;
-    // The one pressed says it took, and takes no press.
-    static const char* names[2] = {"Send", "Share"};
-    static const char* done[2] = {"Sent", "Shared"};
+    float tall = actionReach * degree, pillTall = actionTall * degree, gap = actionGap * degree;
+    // The one pressed says it took, filled with its colour, and takes no press. Share is filled too while its list of
+    // people is open: it is on, and a pinch on it shuts the list. A button is never narrower for what it then says.
+    std::optional<Piece> pieces[2];
+    float wides[2] = {0, 0}, size = 1;
+    for (int b = 0; b < 2; b++) {
+        bool open = b == 1 && sharing.list && sharing.uid == s.uid && sharing.chosen < 0;
+        std::optional<Piece> rest = art->action(actionWords(s, b, false), buttonText, actionAccent(b), actionOn(b), false);
+        if (!rest) return;
+        pieces[b] = art->action(actionWords(s, b, b == pressed), buttonText, actionAccent(b), actionOn(b), open || b == pressed, rest->size.x * Art::ppm);
+        if (!pieces[b]) return;
+        size = pillTall / pieces[b]->size.y;
+        wides[b] = pieces[b]->size.x * size;
+    }
     EntityRef row = Entity::make();
     row->position = {0, crown + tall / 2, 0.1f};
+    float left = -(wides[0] + gap + wides[1]) / 2;
     for (int b = 0; b < 2; b++) {
-        std::optional<Piece> piece = art->pill(b == pressed ? (said.empty() ? std::string(done[b]) : said) : std::string(names[b]), buttonText);
-        if (!piece) return;
-        float x = (b == 0 ? -1.f : 1.f) * wide / 2;
+        float x = b == 0 ? left + wides[0] / 2 : left + wides[0] + gap + wides[1] / 2;
+        // (Its target: a degree past its outer end, and to the middle of the gap.)
+        float wide = wides[b] + degree + gap / 2, centre = x + (b == 0 ? -1.f : 1.f) * (degree - gap / 2) / 2;
         EntityRef target = Entity::make();
-        target->position = {x, 0, 0};
+        target->position = {centre, 0, 0};
         target->collision = {Shape::generateBox({wide, tall, 0.04f})};
+        // A ray on one lights that one, and neither takes the glow of the tree behind them, which turns a dark label tan
+        // (`tendShare` counts a ray on a button as a ray on its tree, since the tree itself is then not what is lit).
+        target->hover = Hover::highlight(Color::white(), b == pressed ? 0 : 0.35f);
         if (b != pressed) picks[target.get()] = Pick::coverButton(s.uid, b);
         row->addChild(target);
         if (Flags::has("showHitAreas")) {
@@ -585,30 +606,38 @@ void OceanModel::showButtons(Shelved& s, int pressed, const std::string& said) {
                                                            UIRectFill(CGRect(box.width - 3, 0, 3, box.height));
                                                        })) {
                 EntityRef shown = art->quad(*area);
-                shown->position = {x, 0, -0.002f};
+                shown->position = {centre, 0, -0.002f};
                 row->addChild(shown);
             }
         }
-        EntityRef pill = art->quad(*piece);
-        // (A longer line, why a share was not taken, keeps within its own button's target, a little smaller.)
-        pill->scale = Vec3::repeating(std::min(pillTall / piece->size.y, wide * 0.94f / piece->size.x));
-        pill->position = {x, 0, 0.004f};
-        row->addChild(pill);
+        EntityRef pill = art->quad(*pieces[b]);
+        pill->scale = Vec3::repeating(size);
+        pill->position = {x - centre, 0, 0.004f};
+        target->addChild(pill);
         s.pills[size_t(b)] = pill;
     }
     holder->addChild(row);
     s.tilts.push_back(row);
     tip({row}, s.el.value(time));
+    bringNearer(s, row);        // FILM: clear of the tree's light and pictures, as large to the eye
     if (!again) fadeIn(row, 0, 0.2f);
     s.buttons = row;
     touch(time + 0.3);
-    logLine(fmt("[ocean] Send and Share over %s: each a target %.0f° by %.0f°, its pill %.0f° tall, at %.2f m, on the crown", s.tree->title.c_str(),
-                double(targetWide), double(targetTall), double(buttonTall), double(d)));
+    logLine(fmt("[ocean] Send and Share over %s: buttons %.0f° and %.0f° wide and %.0f° tall, side by side, their targets %.0f° tall, at %.2f m, on the crown",
+                s.tree->title.c_str(), double(wides[0] / degree), double(wides[1] / degree), double(actionTall), double(actionReach), double(d)));
 }
 
 void OceanModel::coverButton(int uid, int which) {
     auto i = std::find_if(shelf.begin(), shelf.end(), [&](const Shelved& cover) { return cover.uid == uid; });
     if (i == shelf.end() || !i->tree || !agentBridge) return;
+    // FILM: Share opens the list of people to share it with, and shuts it again (oceanmodel_share.cpp): the service is told
+    // once one of them is picked (`sharePerson`).
+    if (which == 1) {
+        if (sharing.list && sharing.uid == uid) closePeople(true);
+        else openPeople(*i);
+        return;
+    }
+    if (sharing.list) closePeople(true);
     bool told = which == 0 ? agentBridge->sendTree(*i->tree) : agentBridge->shareTree(*i->tree);
     logLine(fmt("[ocean] %s pressed over %s%s", which == 0 ? "Send" : "Share", i->tree->title.c_str(), told ? "" : ", but the service could not be told"));
     if (!told) return;

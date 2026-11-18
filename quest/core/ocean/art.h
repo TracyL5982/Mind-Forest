@@ -237,6 +237,13 @@ public:
     std::optional<Piece> plain(const std::string& words, float size, Font face, float alpha = 1, float ppm = 1200);
     std::optional<Piece> way(int number, const std::string& name, const std::string& note, float size, float ppm = 1200);
     std::optional<Piece> pill(const std::string& words, float size, Color ground = hot);
+    // FILM: a square button, in the manner of a brief (oceanmodel_share.cpp): words on a dark rectangle, as wide as they need,
+    // with a bar of `accent` down its left edge. `filled`, the whole of it is the accent and its letters are `onAccent`: it
+    // is on, or it has done its work. `wide`, px, makes it at least that wide. `size` is its letters' height, m.
+    std::optional<Piece> action(const std::string& words, float size, Color accent, Color onAccent, bool filled, float wide = 0);
+    // FILM: a person, with nothing behind them: their round picture, `tall` px across (without one, the first letter of the
+    // name on a disc), and their name beside it in white, letters `size` m high. `ticked`, a tick of `mark` after the name.
+    std::optional<Piece> face(const std::string& name, const ImageRef& picture, float size, float tall, bool ticked = false, Color mark = hot);
     // A button that is an icon (icons.h: "marker", "eraser", "send") on a rounded
     // square `size` metres across, the icon in `mark` on `ground`.
     std::optional<Piece> iconButton(const std::string& icon, float size, Color ground, Color mark);

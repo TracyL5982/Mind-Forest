@@ -368,6 +368,57 @@ std::optional<Piece> Art::pill(const std::string& words, float size, Color groun
     });
 }
 
+std::optional<Piece> Art::action(const std::string& words, float size, Color accent, Color onAccent, bool filled, float wide) {
+    // The proportions of a brief: its words take a third of its height, its bar is a third of a letter wide.
+    Font f = font(size, Font::Weight::semibold);
+    TextAttributes look = attributes(f, filled ? onAccent : Color::white());
+    float line = std::ceil(f.lineHeight()), h = line + 2 * px(size * 0.62f), bar = px(size * 0.34f), padX = px(size * 0.85f);
+    float w = std::max(wide, std::ceil(bar + padX + stringSize(words, look).width + padX));
+    std::string key = "action:" + words + fmt(":%g:%d,%d,%d:%d:%g", double(size), int(accent.r * 255), int(accent.g * 255), int(accent.b * 255), filled ? 1 : 0, double(w));
+    return piece(key, w, h, [&](Canvas&, CGSize) {
+        setFill(filled ? accent : ink);
+        UIRectFill(CGRect{0, 0, w, h});
+        if (!filled) {
+            setFill(accent);
+            UIRectFill(CGRect{0, 0, bar, h});
+        }
+        // (Its words stay where they are when it fills: the bar's place is kept.)
+        drawString(words, CGPoint{bar + padX, (h - line) / 2}, look);
+    });
+}
+
+std::optional<Piece> Art::face(const std::string& name, const ImageRef& picture, float size, float tall, bool ticked, Color mark) {
+    Font f = font(size, Font::Weight::semibold);
+    TextAttributes look = attributes(f, Color::white());
+    float line = std::ceil(f.lineHeight()), d = std::round(tall), gap = px(size * 0.7f), u = line * 0.14f;
+    float named = std::ceil(stringSize(name, look).width);
+    float w = d + gap + named + (ticked ? gap * 0.8f + 3.5f * u + px(size * 0.2f) : 0) + 2;
+    std::string key = "face:" + name + fmt(":%g:%g:%d%d", double(size), double(d), picture ? 1 : 0, ticked ? 1 : 0);
+    return piece(key, w, d, [&](Canvas& ctx, CGSize) {
+        CGRect round{0, 0, d, d};
+        if (picture) {
+            drawImage(picture, round);
+        } else {
+            setFill(Color::hex(0x2A2E36));
+            UIBezierPath::ovalIn(round).fill();
+            std::string initial = name.substr(0, 1);
+            drawString(initial, CGPoint{(d - stringSize(initial, look).width) / 2, (d - line) / 2}, look);
+        }
+        drawString(name, CGPoint{d + gap, (d - line) / 2}, look);
+        if (ticked) {
+            CGPoint c{d + gap + named + gap * 0.8f + 1.7f * u, d / 2};
+            ctx.setStrokeColor(mark);
+            ctx.setLineWidth(px(size * 0.2f));
+            ctx.setLineCap(Canvas::LineCap::round);
+            ctx.setLineJoin(Canvas::LineJoin::round);
+            ctx.move(CGPoint{c.x - 1.7f * u, c.y + 0.1f * u});
+            ctx.addLine(CGPoint{c.x - 0.5f * u, c.y + 1.3f * u});
+            ctx.addLine(CGPoint{c.x + 1.8f * u, c.y - 1.2f * u});
+            ctx.strokePath();
+        }
+    });
+}
+
 std::optional<Piece> Art::iconButton(const std::string& icon, float size, Color ground, Color mark) {
     const std::vector<icons::Line>& lines = icon == "marker" ? icons::marker() : icon == "pencil" ? icons::pencil() : icon == "eraser" ? icons::eraser() : icons::send();
     float w = px(size);
