@@ -811,7 +811,8 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     const gate = (frame: VoiceFrame) => {
       if (frame.t === 'heard') {
         toDevice(frame);
-        if (frame.final && deciding?.turn === frame.turn) settle(frame.text);
+        // Her name alone is no request: the turn goes on, and its words are waited for.
+        if (frame.final && deciding?.turn === frame.turn && frame.text.trim()) settle(frame.text);
         return;
       }
       if (frame.t !== 'text' && frame.t !== 'audio' && frame.t !== 'done') return toDevice(frame);

@@ -71,8 +71,14 @@ const BATCH_MS = 6000;
  */
 const PAUSE_MS = 1800;
 const PIECE_SAMPLES = 1600;
-/** How long the turn detection may take to begin the turn's answer before the service asks for it. */
-const ANSWER_WAIT_MS = 4000;
+/**
+ * Quiet after the last word before a turn the turn detection ended is answered. A breath after the name or a pause mid-line is
+ * shorter, and a word in it keeps the line one turn: the model's own end came after half a second of quiet ("Hi Momo!" then the
+ * request), so Momo answered a fragment and acted on it (the user's ask, 2026-11-18). The service asks for every answer itself.
+ */
+const END_MS = 1200;
+/** Speech, in pieces of 100 ms, past which a turn is more than the name: one the quiet rule ends is answered without waiting for its words. */
+const MORE_THAN_THE_NAME = 15;
 /**
  * How long after a turn was over a call waits for the turn's words to be written down. In the live benches the transcription took
  * 0.51 s at the median and 1.49 s at the slowest (403 turns); 2 of 77 calls that started a Scout run came before it, by 50 and 68 ms.
@@ -196,6 +202,7 @@ export interface LiveDeps {
   now?: () => number;
   idleMs?: number;
   batchMs?: number;
+  /** Quiet after the last word before a turn the turn detection ended is answered (`END_MS`). */
   answerWaitMs?: number;
 }
 
@@ -262,10 +269,12 @@ Messages in square brackets come from Mind Palace, not from the user.
 }
 
 function turnDetection(turn: LiveOptions['turn']): Record<string, unknown> {
-  // The device sends no microphone while Momo speaks, and saying the name stops Momo, so only the device interrupts.
-  const common = { create_response: true, interrupt_response: false };
+  // The device sends no microphone while Momo speaks, and saying the name stops Momo, so only the device interrupts. The service
+  // asks for each answer itself, once the user has finished (`END_MS`) and said more than the name, so the model answers nothing on
+  // its own. Low eagerness lets the user take their time: words that sound unfinished are waited for.
+  const common = { create_response: false, interrupt_response: false };
   return turn.kind === 'semantic'
-    ? { type: 'semantic_vad', eagerness: 'high', ...common }
+    ? { type: 'semantic_vad', eagerness: 'low', ...common }
     : { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: turn.ms, ...common };
 }
 
@@ -476,11 +485,11 @@ export class LiveVoice {
   /**
    * The user's turn while it is heard, from the name until Momo's answer begins: the turn detection may take a pause for its end
    * and hear the user go on. `committed`: it took the end, and no word has come since. `manual`: the device or the pause rule ended
-   * it. `quietest`, `spoke` and `quiet`: the recording rule's reading of the pieces so far.
+   * it. `quietest`, `spoke`, `voiced` and `quiet`: the recording rule's reading of the pieces so far.
    */
-  private hearing: { turn: number; stopped?: number; committed?: boolean; manual?: boolean; quietest: number; spoke: boolean; quiet: number } | null = null;
-  /** The latest turn's words as written down so far, every piece of it. */
-  private words = { turn: 0, text: '' };
+  private hearing: { turn: number; stopped?: number; committed?: boolean; manual?: boolean; quietest: number; spoke: boolean; voiced: number; quiet: number } | null = null;
+  /** The latest turn's words as written down so far, every piece of it, without the name. `written`: a piece of it was. */
+  private words = { turn: 0, text: '', written: false };
   /** Pieces of turns being written down, by the model's item. */
   private transcribing = new Map<string, { turn: number; text: string; over: number }>();
   /** Calls waiting on a turn's words, each looking again as a piece is written down or fails. */
@@ -494,7 +503,7 @@ export class LiveVoice {
   private sight: { nodeId?: string; title: string; crop: string; whole: string; at: number; shown: boolean } | null = null;
   /** What Momo was last told of where the user is. */
   private toldWhere: string | null = null;
-  /** The turn detection's answer to a turn, expected and not begun. `cancel`: the user spoke again first. */
+  /** A turn that may be over, waiting to be answered: until the user has been quiet long enough and its words are written down. */
   private expected: { turn: number; at: number; timer: ReturnType<typeof setTimeout> } | null = null;
   private cancelExpected = false;
   /** A response the service asked for and not begun. `retry`: asked again if the model refuses it while another is under way. */
@@ -573,8 +582,8 @@ export class LiveVoice {
         this.tellWhere();
         this.showSight(frame.scene.focus);
         this.upsampler = new Upsampler();
-        this.hearing = { turn: frame.turn, quietest: Number.POSITIVE_INFINITY, spoke: false, quiet: 0 };
-        this.words = { turn: frame.turn, text: '' };
+        this.hearing = { turn: frame.turn, quietest: Number.POSITIVE_INFINITY, spoke: false, voiced: 0, quiet: 0 };
+        this.words = { turn: frame.turn, text: '', written: false };
         return;
       }
       case 'audio': {
@@ -588,7 +597,10 @@ export class LiveVoice {
           const level = Math.sqrt(sum / PIECE_SAMPLES);
           h.quietest = Math.min(h.quietest, level);
           const words = level > Math.max(0.015, h.quietest * 3);
-          if (words) h.spoke = true;
+          if (words) {
+            h.spoke = true;
+            h.voiced += 1;
+          }
           h.quiet = words ? 0 : h.quiet + 1;
           const pause = (this.deps.options.pauseMs ?? PAUSE_MS) / 100;
           if (pause > 0 && h.spoke && h.quiet === pause && !h.committed) {
@@ -599,7 +611,7 @@ export class LiveVoice {
         return;
       }
       case 'end':
-        this.endTurn();
+        this.endTurn(undefined, true);
         return;
       case 'cancel':
         if (!this.hearing || !this.session) return;
@@ -679,14 +691,70 @@ export class LiveVoice {
     return withoutWakePhrase([before, text.trim()].filter(Boolean).join(' '), this.deps.name()).trim();
   }
 
-  /** The turn is over on the service's side: the device stopped sending, or the user paused. The answer is asked for with the commit. */
-  private endTurn(lastWord?: number): void {
+  /**
+   * The turn is over on the service's side: the device stopped sending, or the user paused. The answer is asked for with the commit,
+   * unless the user said so little it may be only the name: then once its words are written down (`settle`, as the commit arrives),
+   * or anyway if no commit comes.
+   */
+  private endTurn(lastWord?: number, device = false): void {
     const h = this.hearing;
     if (!h || !this.session || h.manual || h.committed) return;
     h.manual = true;
     if (lastWord !== undefined) h.stopped = lastWord;
     this.session.send({ type: 'input_audio_buffer.commit' });
-    this.ask({ kind: 'reply', turn: h.turn }, false);
+    if (device || h.voiced >= MORE_THAN_THE_NAME) this.ask({ kind: 'reply', turn: h.turn }, false);
+    else this.settle(h.turn, SAID_MS);
+  }
+
+  /** The turn may be over: in `hold` ms, if no word came, it is answered once its words are written down (`settled`). */
+  private settle(turn: number, hold: number): void {
+    if (this.expected) clearTimeout(this.expected.timer);
+    const timer = setTimeout(() => void this.settled(turn), Math.max(0, hold));
+    timer.unref?.();
+    this.expected = { turn, at: this.now(), timer };
+  }
+
+  /**
+   * The user has finished: Momo is asked to answer. Unless all they said is her name ("Hey Momo", "Hi Momo!"): then nothing starts,
+   * neither a reply nor a tool, and the turn is still heard, so what they say next joins it. A turn whose words were not written
+   * down in time is answered as heard.
+   */
+  private async settled(turn: number): Promise<void> {
+    if (this.expected?.turn !== turn) return;
+    const words = await this.written(turn);
+    // The user went on, or a new turn began, while the words were written down.
+    if (this.expected?.turn !== turn) return;
+    clearTimeout(this.expected.timer);
+    this.expected = null;
+    const h = this.hearing;
+    if (words === '' && h?.turn === turn) {
+      this.deps.log(`[live] turn ${turn} was only the name: nothing starts, and Momo listens for what comes next`);
+      h.manual = false;
+      h.committed = true;
+      h.quiet = 0;
+      return;
+    }
+    if (!this.speaking && !this.asked) this.ask({ kind: 'reply', turn });
+  }
+
+  /** The turn's words without the name once every piece is written down: '' when only the name was said, undefined if not known in `SAID_MS`. */
+  private async written(turn: number): Promise<string | undefined> {
+    const writing = () => [...this.transcribing.values()].filter((t) => t.turn === turn);
+    if (writing().length > 0) {
+      const left = Math.max(...writing().map((t) => t.over)) + SAID_MS - this.now();
+      await new Promise<void>((done) => {
+        const stop = () => {
+          clearTimeout(timer);
+          this.waiting.delete(look);
+          done();
+        };
+        const look = () => writing().length === 0 && stop();
+        const timer = setTimeout(stop, Math.max(0, left));
+        this.waiting.add(look);
+      });
+    }
+    if (writing().length > 0 || this.words.turn !== turn || !this.words.written) return undefined;
+    return this.words.text;
   }
 
   /**
@@ -831,19 +899,15 @@ export class LiveVoice {
         this.transcribing.set(e.item_id as string, { turn: heard.turn, text: '', over: now });
         this.answering = { turn: heard.turn, at: heard.stopped ?? now };
         if (heard.stopped !== undefined) this.deps.log(`[live] turn ${heard.turn} over ${now - heard.stopped} ms after the model heard the end of speech`);
-        // The turn detection answers a turn it ended itself; one the device ended was asked for with its end, and one it is slow
-        // to answer the service asks for.
-        if (heard.manual) return;
+        // A turn the device or the quiet rule ended is answered once its words are written down. One the turn detection ended
+        // waits until the user has been quiet `END_MS` since the last word: a word before then means they went on, and the line
+        // stays one turn.
+        if (heard.manual) {
+          if (this.expected?.turn === heard.turn) this.settle(heard.turn, 0);
+          return;
+        }
         heard.committed = true;
-        if (this.expected) clearTimeout(this.expected.timer);
-        const timer = setTimeout(() => {
-          if (this.expected?.turn !== heard.turn) return;
-          this.expected = null;
-          this.deps.log(`[live] turn ${heard.turn}: no answer began, so one is asked for`);
-          if (!this.speaking && !this.asked) this.ask({ kind: 'reply', turn: heard.turn }, false);
-        }, this.deps.answerWaitMs ?? ANSWER_WAIT_MS);
-        timer.unref?.();
-        this.expected = { turn: heard.turn, at: now, timer };
+        this.settle(heard.turn, (heard.stopped ?? now) + (this.deps.answerWaitMs ?? END_MS) - now);
         return;
       }
       case 'conversation.item.input_audio_transcription.delta': {
@@ -863,7 +927,7 @@ export class LiveVoice {
         if (dollars !== null) this.deps.spent?.(dollars);
         this.deps.log(`[live] turn ${t.turn} written down ${now - t.over} ms after it was over: ${text}${dollars === null ? '' : ` ($${dollars.toFixed(5)})`}`);
         const whole = this.wordsOf(t.turn, text);
-        if (this.words.turn === t.turn) this.words.text = whole;
+        if (this.words.turn === t.turn) this.words = { turn: t.turn, text: whole, written: true };
         this.device({ t: 'heard', turn: t.turn, text: whole, final: true });
         const clean = withoutWakePhrase(text, this.deps.name()).trim();
         if (clean) this.afterCheck(() => this.deps.spoken({ who: 'user', text: clean }));

@@ -142,7 +142,7 @@ test('the name opens a session in which Momo answers in its own character, with 
     tools: { name: string }[];
     audio: { input: { turn_detection: Record<string, unknown> }; output: { voice: string } };
   };
-  assert.deepEqual(setup.audio.input.turn_detection, { type: 'semantic_vad', eagerness: 'high', create_response: true, interrupt_response: false });
+  assert.deepEqual(setup.audio.input.turn_detection, { type: 'semantic_vad', eagerness: 'low', create_response: false, interrupt_response: false });
   assert.equal(setup.audio.output.voice, 'marin');
   assert.deepEqual(setup.tools.map((t) => t.name), ['web_answer']);
   assert.match(setup.instructions, /curious, warm friend/);
@@ -554,20 +554,35 @@ test("a turn the device ends itself is answered on the service's asking", () => 
   assert.deepEqual(frames.filter((f) => f.t === 'over'), [{ t: 'over', turn: 1 }]);
 });
 
-test("1.8 s of quiet after the last word ends a turn the model's turn detection has not, and a shorter pause does not", () => {
+test("1.8 s of quiet after the last word ends a turn the model's turn detection has not, and a shorter pause does not", async () => {
   const { v, model } = voice();
   const piece = (amp: number) => pcm(Array.from({ length: 1600 }, (_, i) => Math.round(amp * 32767 * Math.sin(i / 3) + (i % 7) - 3)));
   v.heard({ t: 'start', turn: 1, scene: SCENE });
   for (let k = 0; k < 8; k++) v.heard({ t: 'audio', pcm: piece(0) });
-  for (let k = 0; k < 5; k++) v.heard({ t: 'audio', pcm: piece(0.2) });
+  for (let k = 0; k < 10; k++) v.heard({ t: 'audio', pcm: piece(0.2) });
   for (let k = 0; k < 17; k++) v.heard({ t: 'audio', pcm: piece(0) });
   assert.equal(model.sent('input_audio_buffer.commit').length, 0, 'the quiet before the first word, and 1.7 s after it, end nothing');
-  for (let k = 0; k < 3; k++) v.heard({ t: 'audio', pcm: piece(0.2) });
+  for (let k = 0; k < 6; k++) v.heard({ t: 'audio', pcm: piece(0.2) });
   for (let k = 0; k < 18; k++) v.heard({ t: 'audio', pcm: piece(0) });
-  assert.deepEqual(model.last.sent.slice(-2).map((e) => e.type), ['input_audio_buffer.commit', 'response.create']);
+  assert.deepEqual(model.last.sent.slice(-2).map((e) => e.type), ['input_audio_buffer.commit', 'response.create'], 'more than the name was said: answered at once');
   const appended = model.sent('input_audio_buffer.append').length;
   v.heard({ t: 'audio', pcm: piece(0.2) });
   assert.equal(model.sent('input_audio_buffer.append').length, appended, 'nothing more is sent once it is over');
+
+  // A short turn the quiet rule ends may be only the name: it is answered once its words are written down, and not if they are.
+  v.heard({ t: 'start', turn: 2, scene: SCENE });
+  for (let k = 0; k < 8; k++) v.heard({ t: 'audio', pcm: piece(0) });
+  for (let k = 0; k < 6; k++) v.heard({ t: 'audio', pcm: piece(0.2) });
+  for (let k = 0; k < 18; k++) v.heard({ t: 'audio', pcm: piece(0) });
+  assert.equal(model.last.sent.at(-1)!.type, 'input_audio_buffer.commit');
+  const asked = model.sent('response.create').length;
+  model.last.event({ type: 'input_audio_buffer.committed', item_id: 'item-2' });
+  model.writes('item-2', 'Hey Momo.');
+  await tick();
+  await tick();
+  assert.equal(model.sent('response.create').length, asked, 'only the name: nothing is asked');
+  for (let k = 0; k < 4; k++) v.heard({ t: 'audio', pcm: piece(0.2) });
+  assert.ok(model.sent('input_audio_buffer.append').length > appended + 24, 'and the turn is still heard');
 });
 
 test('a turn the turn detection ended at a pause goes on when the user does: its early answer is cancelled, and its words are kept whole', () => {
@@ -584,6 +599,57 @@ test('a turn the turn detection ended at a pause goes on when the user does: its
   const heard = frames.filter((f) => f.t === 'heard' && f.final);
   assert.deepEqual(heard.at(-1), { t: 'heard', turn: 1, text: 'So why did Vermeer paint so few pictures?', final: true });
   assert.deepEqual(frames.filter((f) => f.t === 'over'), [{ t: 'over', turn: 1 }], 'over once, as the answer to all of it begins');
+});
+
+test("her name alone starts nothing, and a line with a 0.8 s pause in it is one turn: its answer is asked for once, after all of it, once the user has been quiet 1.2 s", async () => {
+  const { v, model, frames, clock, called } = voice();
+  const wait = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+  const at = (ms: number) => (clock.now = 1000 + ms);
+  const event = (type: string, item?: string) => model.last.event({ type, ...(item ? { item_id: item } : {}) });
+  v.heard({ t: 'start', turn: 1, scene: SCENE });
+  v.heard({ t: 'audio', pcm: pcm([1, 2, 3, 4]) });
+  // "Hi Momo!", then a breath the turn detection takes for the end, 1.1 s after the last word.
+  at(0);
+  event('input_audio_buffer.speech_stopped', 'item-1');
+  at(1100);
+  event('input_audio_buffer.committed', 'item-1');
+  model.writes('item-1', 'Hi Momo!');
+  await wait(250);
+  assert.equal(model.sent('response.create').length, 0, 'her name alone: no answer is asked for, so no reply and no tool');
+  assert.deepEqual(frames.filter((f) => f.t === 'over'), [], 'and the turn is still heard');
+
+  // The line, with a pause of 0.8 s in it that the turn detection also takes for the end.
+  at(2000);
+  event('input_audio_buffer.speech_started');
+  v.heard({ t: 'audio', pcm: pcm([1, 2, 3, 4]) });
+  at(3000);
+  event('input_audio_buffer.speech_stopped', 'item-2');
+  at(3600);
+  event('input_audio_buffer.committed', 'item-2');
+  model.writes('item-2', "I'm designing a mind palace in XR,");
+  await wait(100);
+  at(3800);
+  event('input_audio_buffer.speech_started');
+  await wait(700);
+  assert.equal(model.sent('response.create').length, 0, 'a pause mid-line ends nothing');
+  v.heard({ t: 'audio', pcm: pcm([1, 2, 3, 4]) });
+  at(5000);
+  event('input_audio_buffer.speech_stopped', 'item-3');
+  at(5300);
+  event('input_audio_buffer.committed', 'item-3');
+  model.writes('item-3', 'and looking for ideas.');
+  await wait(400);
+  assert.equal(model.sent('response.create').length, 0, 'not before the user has been quiet 1.2 s');
+  await wait(700);
+  assert.deepEqual(model.sent('response.create').map((e) => e.response), [{ metadata: { purpose: 'reply' } }], 'asked for once, after the whole line');
+  const heard = frames.filter((f) => f.t === 'heard' && f.final);
+  assert.deepEqual(heard.at(-1), { t: 'heard', turn: 1, text: "I'm designing a mind palace in XR, and looking for ideas.", final: true });
+  model.begins('r1', 'reply');
+  model.calls('r1', 'c1', 'find_new', { subject: 'mind palace in XR', angle: '' });
+  model.ends('r1');
+  await tick();
+  assert.deepEqual(frames.filter((f) => f.t === 'over'), [{ t: 'over', turn: 1 }], 'over once, as the answer to all of it begins');
+  assert.deepEqual(called.map((c) => c.name), ['find_new'], 'one search, for the whole line');
 });
 
 test('a turn the turn detection ended but never answered is answered on the service\'s asking', async () => {

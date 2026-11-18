@@ -753,9 +753,9 @@ class Realtime {
   writes(item: string, words: string) {
     this.last.event({ type: 'conversation.item.input_audio_transcription.completed', item_id: item, transcript: words });
   }
-  /** Its own answer to the turn begins, and says `words` with 200 ms of sound. */
-  answers(id: string, words: string) {
-    this.last.event({ type: 'response.created', response: { id, metadata: null } });
+  /** Its answer to the turn begins, its own or the one the service asked for (`purpose`), and says `words` with 200 ms of sound. */
+  answers(id: string, words: string, purpose?: string) {
+    this.last.event({ type: 'response.created', response: { id, metadata: purpose ? { purpose } : null } });
     this.last.event({ type: 'response.output_audio_transcript.delta', response_id: id, delta: words });
     for (let n = 0; n < 2; n++) this.last.event({ type: 'response.output_audio.delta', response_id: id, item_id: `${id}-audio`, delta: Buffer.alloc(4800).toString('base64') });
   }
@@ -766,7 +766,59 @@ class Realtime {
   ends(id: string) {
     this.last.event({ type: 'response.done', response: { id, status: 'completed' } });
   }
+  /** The user is heard talking again. */
+  resumes() {
+    this.last.event({ type: 'input_audio_buffer.speech_started' });
+  }
+  /** Answers it was asked for. */
+  asked() {
+    return this.sessions.flatMap((s) => s.sent).filter((e) => e.type === 'response.create').length;
+  }
 }
+
+test("with a round waiting on the open card, her name alone starts nothing, and the round starts once, after the user's whole line", { timeout: 30000 }, async () => {
+  const model = new Realtime();
+  const run = await prunedDemo(model.open);
+  let headset: Awaited<ReturnType<typeof wearing>> | null = null;
+  try {
+    headset = await wearing(run);
+    await run.demo!.goto('f1');
+    const depth = nodeOf(run, 'By depth')!;
+    const had = model.started();
+    headset.talk({ t: 'start', turn: 1, scene: { focus: depth.id, treeId: depth.treeId, selection: [] } });
+    await soon(() => model.started() > had);
+
+    // "Hey Momo", and a breath the turn detection takes for the end: nothing is asked of her, so nothing can start.
+    model.commits('i1');
+    model.writes('i1', 'Hey Momo.');
+    await new Promise((r) => setTimeout(r, 1600));
+    assert.equal(model.asked(), 0, 'her name alone asks nothing of her');
+    assert.equal(run.mind.children(depth.id).length, 0, 'and no round starts');
+
+    // The user goes on, with a pause mid-line: the answer is asked for once, after all of it.
+    model.resumes();
+    model.commits('i2');
+    model.writes('i2', 'Whoa, this looks impressive, but also a little overwhelming—');
+    await new Promise((r) => setTimeout(r, 300));
+    model.resumes();
+    model.commits('i3');
+    model.writes('i3', 'seems easy to get lost wandering around...');
+    await soon(() => model.asked() === 1, 4000);
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(model.asked(), 1, 'once');
+    // She answers with the search the round waits on, and the round plays, once.
+    model.answers('r1', 'Let me find ways to keep your bearings.', 'reply');
+    model.calls('r1', 'c1', 'find_new', { subject: 'ways not to get lost', angle: '' });
+    model.ends('r1');
+    await soon(() => run.demo!.status().rounds.find((round) => round.id === 'f1')!.state === 'played', 8000);
+    await run.pipeline.idle();
+    const under = titlesUnder(run, 'By depth');
+    assert.deepEqual([...under].sort(), cardsOf('f1').map((card) => card.title).sort(), "the round's cards, each once");
+  } finally {
+    headset?.off();
+    await run.close();
+  }
+});
 
 test("asked by voice to prune Llull's ring, the director cuts it as the headset's own cut and Momo says her line; her own answer, held for the words, never reaches the headset", { timeout: 30000 }, async () => {
   const model = new Realtime();
