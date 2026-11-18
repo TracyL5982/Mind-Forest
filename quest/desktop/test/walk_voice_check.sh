@@ -46,18 +46,18 @@ else
     echo "FAILED her ears stay the walk's through her answer: $order"
     failed=$((failed + 1))
 fi
-# Left alone on the example cards, the walk takes card 6 itself 20 s after her answer ends (WS103, the user's: "let's still
-# auto-advance to next step after 20seconds"; WS80 had Momo's lessons wait for a pinch), and not before.
+# Left alone on the example cards, the walk takes card 6 itself 5 s after her answer ends (WS103, the user's: "5 seconds
+# after momo stops talking"; WS80 had Momo's lessons wait for a pinch), and not while she is still answering.
 rm -rf "$DATA" && mkdir -p "$DATA"
 log=$(./preview -mute -dataDir "$DATA" -guideDemo tour -guideStep 5 -guideHear ready -guideSayAt 18 -guideSay Hi_Momo_what_can_you_do_for_me \
-    -shot "$DATA/shot.png" -shotAt 66 2>&1)
+    -shot "$DATA/shot.png" -shotAt 48 2>&1)
 rm -rf "$DATA-early" && mkdir -p "$DATA-early"
 early=$(./preview -mute -dataDir "$DATA-early" -guideDemo tour -guideStep 5 -guideHear ready -guideSayAt 18 -guideSay Hi_Momo_what_can_you_do_for_me \
-    -shot "$DATA/shot-early.png" -shotAt 50 2>&1)
+    -shot "$DATA/shot-early.png" -shotAt 33 2>&1)
 if echo "$log" | grep -q "lesson 5 finished" && echo "$log" | grep -q "in focus: Step 6 of 8" && ! echo "$early" | grep -q "in focus: Step 6 of 8"; then
-    echo "ok     left alone on the example cards, the walk goes on to step 6 by itself 20 s after her answer, not before"
+    echo "ok     left alone on the example cards, the walk goes on to step 6 by itself 5 s after her answer, not during it"
 else
-    echo "FAILED left alone on the example cards, the walk goes on to step 6 by itself 20 s after her answer"
+    echo "FAILED left alone on the example cards, the walk goes on to step 6 by itself 5 s after her answer"
     echo "$log" | grep "\[guide\]\|in focus" | tail -4 | sed 's/^/         /'
     failed=$((failed + 1))
 fi

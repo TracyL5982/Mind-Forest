@@ -1173,10 +1173,10 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     // a minute, the walk takes it itself (sooner where the card is not there to pinch: the small tree has
     // taken you to another layer).
     bool canPinchNext = open && nextCard && here;
-    // WS103: 20 s, the user's ("let's still auto-advance to next step after 20seconds"), and out of Momo's two lessons too,
-    // counted there from her last word (her answer, or her reply to an example asked), so that nobody still talking to her
-    // is taken on. (WS80 had them wait for a pinch.)
-    static const double autoAfter = Flags::has("guideAutoAfter") ? Flags::number("guideAutoAfter") : 20;
+    // WS103: 5 s after a lesson is done, the user's ("it should auto-advance 5 seconds after a step is done … for momo step,
+    // it should be 5 seconds after momo stops talking"), Momo's two lessons too: there counted from her last word (her
+    // answer, or her reply to an example asked), once her answer's layer stands. (WS80 had them wait for a pinch.)
+    static const double autoAfter = Flags::has("guideAutoAfter") ? Flags::number("guideAutoAfter") : 5;
     bool hers = at == momoStep || at == markStep;
     double doneSince = hers ? std::max({teach.tourAdvanceAt, teach.answerEnds, teach.askedUntil}) : teach.tourAdvanceAt;
     if (passing && !zoomed && !busy && !holdDone && now - doneSince >= (canPinchNext ? autoAfter : 4.0)) {
