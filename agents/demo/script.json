@@ -221,6 +221,19 @@
      "image": "data-mountain-1998.jpg",
      "w": 1400,
      "h": 1016
+    },
+    {
+     "id": "slice-of-heartland",
+     "origin": "ocean",
+     "title": "Slice of Heartland",
+     "text": "A tree drawn as 100 cross-sections, one poster each",
+     "why": "a tree as 100 cross-sections",
+     "credit": "In copyright",
+     "href": "https://spoon-tamago.com/slice-of-heartland-beer-art-project/",
+     "kind": "film",
+     "image": "slice-of-heartland.jpg",
+     "w": 1000,
+     "h": 523
     }
    ]
   },
@@ -229,18 +242,18 @@
    "chart": "s7",
    "title": "Round 2 · Other analogies",
    "parent": "r1",
-   "head": "krokos-2019",
-   "say": "Hey Momo, the analogy of \"memory palace\" and \"data mountain\" is interesting, other ideas?",
+   "head": "slice-of-heartland",
+   "say": "Hey Momo, the tree as an analogy looks interesting, can we explore that a bit more?",
    "sayAlso": [],
    "do": [
-    "Pinch the memory palace paper: it opens"
+    "Pinch Slice of Heartland: it opens"
    ],
-   "momo": "From your ocean: Biotecture and five of your pins. From outside: a coral, a table with gaps, a song in a ring, a city and a ring of ideas.",
+   "momo": "From your ocean: Biotecture and five of your pins. From outside: Darwin's first tree, a coral, a table with gaps, a song in a ring, a city and a ring of ideas.",
    "offers": [
     "Why a coral and not a tree?",
     "What are the gaps in the table for?"
    ],
-   "note": "Named on the board: 'Pinch the memory palace paper'.",
+   "note": "The user's choice (2026-11-17): asked from Slice of Heartland, which moved into Round 1 for it.",
    "cards": [
     {
      "id": "t080",
@@ -299,6 +312,24 @@
      "image": "moma-445074.jpg",
      "w": 748,
      "h": 760
+    },
+    {
+     "id": "darwin-tree",
+     "origin": "external",
+     "title": "I think",
+     "text": "",
+     "why": "Darwin's tree of branches",
+     "date": "Notebook B, 1837",
+     "credit": "Cambridge University Library · public domain",
+     "by": "Charles Darwin",
+     "holder": "Cambridge University Library (Darwin Archive)",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Darwin_Tree_1837.png",
+     "kind": "artwork",
+     "image": "darwin-tree.jpg",
+     "w": 613,
+     "h": 1000
     },
     {
      "id": "t023",
@@ -420,15 +451,15 @@
    "chart": "u1",
    "title": "From Round 2 · More of this",
    "parent": "n2",
-   "head": "t125",
+   "head": "t080",
    "say": "More of this",
    "sayAlso": [],
    "do": [
-    "Pinch and hold the Neurones poster: the ring fills"
+    "Pinch and hold A disc of pictures: the ring fills"
    ],
    "momo": "More like that one: eleven from your own Graph board, then a neuron and a river delta from outside.",
    "offers": [],
-   "note": "Named on the board: the long pinch on the Neurones poster.",
+   "note": "The user's choice (2026-11-17): the long pinch on A disc of pictures, so Round 3 alone is asked from the Neurones poster.",
    "cards": [
     {
      "id": "t047",
@@ -630,17 +661,17 @@
    "chart": "s47",
    "title": "Round 3 · Draw on a diagram: keep it organized",
    "parent": "n2",
-   "head": "llull-figure",
+   "head": "darwin-tree",
    "say": "so how do we keep the information organized?",
    "sayAlso": [
     "this looks cool but has a lot going on, how do we keep the information organized?"
    ],
    "do": [
-    "Draw on one of the diagrams"
+    "Draw on Darwin's notebook tree"
    ],
    "momo": "Three ways, each on its own card: by time, by branches, or by what stands in front. Examples are under each.",
    "offers": [],
-   "note": "Choice: the board says 'Draw on one of the diagrams' and Round 2 holds no drawn diagram any more; Llull's ring is the one with 'a lot going on'. Kai's Linux picture (with its mark) and his note stand in this panel on the board.",
+   "note": "The user's choice (2026-11-17): asked from Darwin's notebook tree (\"I think\"), which Round 2 brings and Momo's opening names. Kai's Linux picture (with its mark) and his note stand in this panel on the board.",
    "cards": [
     {
      "id": "gen-idea-time",
@@ -673,19 +704,6 @@
      "h": 700
     },
     {
-     "id": "slice-of-heartland",
-     "origin": "ocean",
-     "title": "Slice of Heartland",
-     "text": "A tree drawn as 100 cross-sections, one poster each",
-     "why": "a tree as 100 cross-sections",
-     "credit": "In copyright",
-     "href": "https://spoon-tamago.com/slice-of-heartland-beer-art-project/",
-     "kind": "film",
-     "image": "slice-of-heartland.jpg",
-     "w": 1000,
-     "h": 523
-    },
-    {
      "id": "tree-ct",
      "origin": "ocean",
      "title": "WoodSwimmer",
@@ -716,24 +734,6 @@
      "image": "gen-idea-branches.jpg",
      "w": 800,
      "h": 640
-    },
-    {
-     "id": "darwin-tree",
-     "origin": "external",
-     "title": "I think",
-     "text": "",
-     "why": "Darwin's tree of branches",
-     "date": "Notebook B, 1837",
-     "credit": "Cambridge University Library · public domain",
-     "by": "Charles Darwin",
-     "holder": "Cambridge University Library (Darwin Archive)",
-     "from": "Wikimedia Commons",
-     "licence": "Public domain",
-     "href": "https://commons.wikimedia.org/wiki/File:Darwin_Tree_1837.png",
-     "kind": "artwork",
-     "image": "darwin-tree.jpg",
-     "w": 613,
-     "h": 1000
     },
     {
      "id": "sea-fan",
@@ -1256,7 +1256,7 @@
    "chart": "s109",
    "title": "Free-form · Layers?",
    "parent": "n3",
-   "head": "slice-of-heartland",
+   "head": "tree-ct",
    "say": "Layers?",
    "sayAlso": [],
    "do": [
@@ -1268,7 +1268,7 @@
     "Should old layers fade?",
     "A moment, or a kind of thing?"
    ],
-   "note": "Kai set Slice of Heartland beside this panel's line, so it is the card the round is asked from. The chart draws 'Layers?' after 'tree branches': that order is kept.",
+   "note": "The lead's call (2026-11-17): asked from WoodSwimmer, the wood film its first step marks, since Slice of Heartland now leads Round 2 and two rounds asked from one card share a layer. The chart draws 'Layers?' after 'tree branches': that order is kept.",
    "cards": [
     {
      "id": "engelbrecht-theatre",
@@ -3171,7 +3171,7 @@
    {
     "id": "s7",
     "phase": "n2",
-    "text": "Round 2 · “Hey Momo, the analogy of ... is interesting, other ideas?”",
+    "text": "Round 2 · “Hey Momo, the tree as an analogy looks interesting, can we explore that a bit more?”",
     "kind": "ask",
     "x": 304,
     "y": 105,
@@ -3181,7 +3181,7 @@
    {
     "id": "u1",
     "phase": "mo",
-    "text": "More of this",
+    "text": "More of this · long pinch on A disc of pictures",
     "kind": "ask",
     "x": 608,
     "y": 0,
@@ -3191,7 +3191,7 @@
    {
     "id": "s47",
     "phase": "n3",
-    "text": "Round 3 · drawing to annotate on one of the diagrams, “this looks cool but has a lot going on, how do we keep the information organized?”",
+    "text": "Round 3 · drawing on Darwin's notebook tree, “this looks cool but has a lot going on, how do we keep the information organized?”",
     "kind": "ask",
     "x": 608,
     "y": 116,

@@ -12,6 +12,14 @@
  * recording is in. A round that is written already is left as it is.
  * Usage: node --no-warnings --import tsx scripts/demo-lines.ts [--mode real] [--only r1,n2] [--again] [--check] [--retake [--lines r1:a1]]
  *   --again   writes the named rounds afresh.
+ *   --answer  "<words>": with --only one round, her answer as its search starts is these words, said as written, and what she
+ *             says after it follows from them.
+ *   --steer   "<note>": with --only one round, she is given this note just before her answer as its search starts, which she
+ *             then says in her own words.
+ *   --wrap    "<note>": with --only one round, she is given this note just before her wrap-up, which she then says in her own
+ *             words.
+ *   --openings N: with --only one round, she is asked for that answer alone N times, each in a conversation of its own, and
+ *             what she said and how long it took is printed. Nothing is written: the one kept is then given with --answer.
  *   --check   has every recording written out again from its sound, and says where the words differ from the line.
  *   --retake  puts each line with no recording in her realtime voice to her again, as written. The lines said outside any
  *             round (`said` in lines.json, as the daily tree's and a shared tree's) are among them; `--retake --only said`
@@ -42,6 +50,18 @@ const flag = (name: string) => args.includes(name);
 /** The pace whose takes are written: the fast ones, or with `--mode real` those at the pace of a real round. */
 const mode: Mode = args.includes('--mode') && args[args.indexOf('--mode') + 1] === 'real' ? 'real' : 'fast';
 const only = args.includes('--only') ? new Set((args[args.indexOf('--only') + 1] ?? '').split(',')) : null;
+/** Her answer in the round written, as written for her: the round's opening line when the user has put it in words. */
+const answer = args.includes('--answer') ? (args[args.indexOf('--answer') + 1] ?? '').trim() : '';
+/** A note she is given before her answer in the round written, which she answers in her own words. */
+const steer = args.includes('--steer') ? (args[args.indexOf('--steer') + 1] ?? '').trim() : '';
+/** How many times she is asked for her answer alone, to choose one from. */
+const openings = args.includes('--openings') ? Number(args[args.indexOf('--openings') + 1]) : 0;
+/** A note she is given before her wrap-up in the round written, which she answers in her own words. */
+const wrapNote = args.includes('--wrap') ? (args[args.indexOf('--wrap') + 1] ?? '').trim() : '';
+if ((answer || steer || openings || wrapNote) && only?.size !== 1) {
+  console.error('--answer, --steer, --wrap and --openings are about one round: name that round alone with --only.');
+  process.exit(1);
+}
 if (!env.OPENAI_API_KEY) {
   console.error('OPENAI_API_KEY is not set: Momo cannot be asked or recorded.');
   process.exit(1);
@@ -236,13 +256,19 @@ const dataDir = mkdtempSync(join(tmpdir(), 'mp-demo-lines-'));
 const run = await startServer({ port: 0, host: '127.0.0.1', dataDir, clientDir: join(root, 'client'), model: new FakeModel(), roles: fakeRoles, token: 'lines', demo: { script, mediaDir: join(demoDir, 'media') } });
 const titleOf = new Map(script.phases.flatMap((phase) => phase.cards.map((card): [string, string] => [card.id, card.title])));
 
-async function write(phase: ScriptPhase): Promise<Line[]> {
+/** The tree set up just before a round, and what she is told of where the user is then. */
+async function setUp(phase: ScriptPhase): Promise<{ under: string; where: string }> {
   await run.demo!.goto(phase.id);
   const head = phase.head === 'root' ? undefined : [...run.mind.nodes.values()].find((node) => run.mind.item(node.itemId).title === titleOf.get(phase.head));
   const under = head ? run.mind.item(head.itemId).title : script.topic;
   const where = head
     ? `${whereNote(run.pipeline.ctx, { focus: head.id, treeId: head.treeId, selection: [] })}\nRecording: with this card open, the next thing the user says ${phase.cards.length > 0 ? 'asks for a new layer on it' : 'is a question to answer aloud from this card'}.`
     : whereNote(run.pipeline.ctx, { selection: [] });
+  return { under, where };
+}
+
+async function write(phase: ScriptPhase): Promise<Line[]> {
+  const { under, where } = await setUp(phase);
   const likely = phase.cards.map((card) => card.title).join(', ');
   const momo = conversation();
   try {
@@ -251,18 +277,50 @@ async function write(phase: ScriptPhase): Promise<Line[]> {
       // Many cards at once: the demo has always asked her to count them and name one, where the live note asks for every name.
       if (note) momo.note(kind === 'more' && cards.length > 2 ? note.replace(/Tell the user in one short sentence that names them\.$/, 'Say how many came and name the one you like best, in one short sentence.') : note);
       else momo.said(phase.say.replace(/^hey momo,?\s*/i, ''));
+      // A written answer is hers to say as written, so that what she says after it follows from it.
+      const written = kind === 'answer' ? answer : '';
+      if (written) momo.note(`For this one answer, say these words exactly, word for word and nothing more, then call find_new on the open card. Never say them again later: "${written}"`);
+      else if (kind === 'answer' && steer) momo.note(steer);
+      if (kind === 'wrap' && wrapNote) momo.note(wrapNote);
       if (spent.dollars > BUDGET) throw new Error(`this run has spent $${spent.dollars.toFixed(2)}, past its budget of $${BUDGET}`);
       let said = await momo.ask();
       // She may call the search without a word: then she is asked once more for the words that go with it.
       if (!said.text && kind === 'answer') said = await momo.ask();
-      if (!said.text) return { text: '', ms: 0 };
-      const kept = await keep(said.text, kind, said.pcm, likely);
+      if (!said.text && !written) return { text: '', ms: 0 };
+      const kept = await keep(written || said.text, kind, said.pcm, likely);
       console.log(`  ${kind.padEnd(6)} ${(kept.ms / 1000).toFixed(1).padStart(5)} s  ${kept.how}: ${kept.text}`);
       return { text: kept.text, ms: kept.ms };
     }, mode);
   } finally {
     momo.close();
   }
+}
+
+if (openings > 0) {
+  // Her answer alone, each time in a conversation of its own, to choose one from: printed, and nothing written.
+  const phase = script.phases.find((p) => only!.has(p.id));
+  if (!phase) throw new Error(`no round ${[...only!].join(',')} in the script`);
+  try {
+    const { where } = await setUp(phase);
+    for (let take = 1; take <= openings; take++) {
+      const momo = conversation();
+      try {
+        momo.note(`[Where the user is] ${where}`);
+        momo.said(phase.say.replace(/^hey momo,?\s*/i, ''));
+        if (steer) momo.note(steer);
+        let said = await momo.ask();
+        if (!said.text) said = await momo.ask();
+        console.log(`  opening ${take}: ${(said.pcm.length / 48_000).toFixed(1)} s  ${said.text}`);
+      } finally {
+        momo.close();
+      }
+    }
+  } finally {
+    await run.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+  console.log(`$${spent.dollars.toFixed(2)} on the realtime model`);
+  process.exit(0);
 }
 
 try {

@@ -146,11 +146,18 @@ In a take Momo's wrap-up starts only once every agent's label has gone: the last
 
 How long a round takes is mostly Momo: the found cards land 3 to 6.5 seconds in, a written idea from 13 seconds, a made picture at about 30, and she talks for 30 to 50 seconds. The page shows each take's length.
 
-Three more controls:
+Four more controls:
 
 - **Empty stage** takes the tree away, for recording Round 1, and starts the app again on the headset (see below). **Whole tree** builds everything.
 - **Rounds are scripted**, off: the next request is answered by the real Scout, live, and Momo speaks for herself. On again: the next request starts the next round's take.
 - **4 other trees in the forest**, off: the showcase trees (below) are taken out, and the headset's app is started again so it lets go of them.
+- **Ask about Muse Code** has Momo ask her question at the walkthrough's end again, for another take (below).
+
+### The walkthrough's end
+
+When the last round, "From a tree to a forest" (step 31), has played to its end, Momo asks from her recording, with its caption: "Ready to take this to Muse Code, to have your mind forest built out?" (`said.museCode` in `lines.json`). She asks once in each set-up: a take of the last round played again without setting it up again asks nothing, and nor does a tree built whole with **Whole tree**, a take that is paused or stopped, or a bar moved to the end. **Ask about Muse Code** asks it again by hand. With "Rounds are scripted" off she does not ask.
+
+The next thing the user says to her, whatever it is, is answered from a second recording: "Done. It's handed off to Muse Code, with your default preference settings." (`said.handedOff`). Nothing is handed off for real. It is one of the director's held answers, as the prune of Llull's ring is: from the moment she starts to ask, her answer to each spoken turn waits for its words (2 s at most), and on the user's next turn her own answer is dropped, any tool she calls for it does nothing, and the recording is said once her question has ended. The turn after that is hers again.
 
 ### Recording Round 1
 
@@ -255,6 +262,15 @@ Everything the demo shows is in two places:
 Edit `script.json` by hand for small changes, then start the service again. Two rules the service holds a tree to: no two cards with the same title, and no two with the same address (`href`).
 
 The file was generated from the walkthrough board by `sketches/walkthrough/gen/demo_inventory.py` in the main folder on Kai's Mac, which is not in git (the board's working files live only there). Run again, it writes into this branch's folder. `demo_phases.json` beside it says which card each round is asked from. Where the board names the card ("Pinch the memory palace paper") that card is the head; where it does not, the head is Claude's choice, and each round's "About this round" on the page says which.
+
+The user changed the storyboard on 2026-11-17, in `script.json` itself, so running the generator again would undo it:
+
+- Slice of Heartland moved from Round 3 into Round 1, and Round 2 is asked from it with "Hey Momo, the tree as an analogy looks interesting, can we explore that a bit more?".
+- Momo opens Round 2 in her own words, as long as the user's example and in its spirit ("Let's map it out. I built a few interactive cards from Darwin's 1837 branching notebook alongside a 3D biotecture model—sketch on whichever structure clicks!"), but claiming only what the cards are: "Let’s map it out: I’m bringing Darwin’s 1837 branching tree sketch and a Biotecture tower drawn like a tree. Sketch on whichever structure clicks." It was the best of her takes, asked for with `scripts/demo-lines.ts --only n2 --openings 3 --steer "<note>"`, and then given to both paces with `--answer`.
+- Darwin's 1837 tree ("I think") moved from Round 3 into Round 2, beside Biotecture, so those words are true of the round.
+- "More of this" is the long pinch on A disc of pictures, a Round 2 card, not on the Neurones poster.
+- Round 3 is asked from Darwin's notebook tree, not Llull's ring, and is drawn on there. Momo's wrap-up in Round 2 points at that card (`scripts/demo-lines.ts --wrap "<note>"`), and the user prunes Llull's ring. The Neurones poster leads no round.
+- "Layers?" is asked from WoodSwimmer, not Slice of Heartland, since two rounds asked from one card put both rounds' cards on one layer.
 
 ## How it works
 

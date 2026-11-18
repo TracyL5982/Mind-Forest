@@ -694,6 +694,11 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         void director.growDaily().catch(() => {});
         return json(res, 202, director.status());
       }
+      // Momo's question at the walkthrough's end, asked again by hand for another take.
+      if (req.method === 'POST' && path === '/api/demo/ending') {
+        void director.askMuseCode().catch(() => {});
+        return json(res, 202, director.status());
+      }
       return json(res, 404, { error: 'not found' });
     }
     if (req.method === 'GET' && path === '/demo' && director) return serveStatic(res, opts.clientDir, '/demo.html');

@@ -91,8 +91,11 @@ test('going to a round builds every round before it, kept, and leaves it the nex
     assert.equal(run.mind.nodes.size, wanted + 1);
     assert.ok([...run.mind.nodes.values()].every((node) => node.status === 'kept'));
     assert.equal(run.demo!.status().armed, 3);
-    // Round 2 hangs from the paper Round 1 brought, as the script says.
-    assert.deepEqual(titlesUnder(run, 'Virtual memory palaces: immersion aids recall').sort(), cardsOf('n2').map((card) => card.title).sort());
+    // Round 2 hangs from the film Round 1 brought, as the script says, More of this from A disc of pictures, and Round 3 waits on
+    // Darwin's notebook tree with nothing under it.
+    assert.deepEqual(titlesUnder(run, 'Slice of Heartland').sort(), cardsOf('n2').map((card) => card.title).sort());
+    assert.deepEqual(titlesUnder(run, 'A disc of pictures').sort(), cardsOf('mo').map((card) => card.title).sort());
+    assert.deepEqual(titlesUnder(run, 'I think'), []);
     // The card's look is chosen with it: a paper is a reference, a picture carries its shape.
     const paper = nodeOf(run, 'Virtual memory palaces: immersion aids recall')!;
     assert.equal(paper.view.component, 'reference');
@@ -113,8 +116,8 @@ test('a request on the card a round is asked from plays that round as the Scout 
   await new Promise((open) => ws.on('open', open));
   try {
     await run.demo!.goto('n3');
-    const head = nodeOf(run, 'Llull’s ring')!;
-    await run.pipeline.more(head.id);
+    const head = nodeOf(run, 'I think')!;
+    await run.pipeline.ask(head.id, 'so how do we keep the information organized?');
     await run.pipeline.idle();
     await over(run);
     const landed = run.mind.children(head.id);
@@ -163,8 +166,8 @@ test('the questions under a round\'s card are the script\'s, and the stage can b
   const run = await boot();
   try {
     await run.demo!.goto('n2');
-    const paper = nodeOf(run, 'Virtual memory palaces: immersion aids recall')!;
-    assert.deepEqual(await run.pipeline.questions(paper.id), script.phases.find((phase) => phase.id === 'n2')!.offers);
+    const film = nodeOf(run, 'Slice of Heartland')!;
+    assert.deepEqual(await run.pipeline.questions(film.id), script.phases.find((phase) => phase.id === 'n2')!.offers);
     const tree = [...run.mind.trees.keys()][0];
     // Going on keeps the tree a headset has standing; only an empty stage takes it away.
     await run.demo!.goto('f1');
@@ -264,14 +267,14 @@ test('Momo is told, with where the user is, when the next words said on the open
   const run = await boot();
   try {
     await run.demo!.goto('n3');
-    const ring = nodeOf(run, 'Llull’s ring')!;
-    assert.match(run.demo!.takeNote(ring.id), /^\nRecording: .*new layer/);
+    const darwin = nodeOf(run, 'I think')!;
+    assert.match(run.demo!.takeNote(darwin.id), /^\nRecording: .*new layer/);
     assert.equal(run.demo!.takeNote(nodeOf(run, 'Corals')!.id), '', 'no round waits on this card, so Momo is told nothing more');
     assert.equal(run.demo!.takeNote(undefined), '');
-    await run.pipeline.more(ring.id);
+    await run.pipeline.more(darwin.id);
     await run.pipeline.idle();
     await over(run);
-    assert.equal(run.demo!.takeNote(ring.id), '', 'the round was played: the card is an ordinary card again');
+    assert.equal(run.demo!.takeNote(darwin.id), '', 'the round was played: the card is an ordinary card again');
     // The one round that brings nothing is answered aloud from its card.
     await run.demo!.goto('bs');
     assert.match(run.demo!.takeNote(nodeOf(run, 'Sources')!.id), /answer aloud/);
@@ -632,15 +635,13 @@ test("Send on a tree hands that tree off to the paired chat as a file: a showcas
 
 // ---- the pruned card
 
-/** The script as the lead is changing it: Round 3 asked from the Neurones poster, so Llull's ring can be cut and the rounds go on. */
-const ringless = { ...script, phases: script.phases.map((phase) => (phase.id === 'n3' ? { ...phase, head: 't125' } : phase)) };
 
 /** The walkthrough with Momo's voice, whose lines are recorded by a stand-in as sound as long as their words. */
 async function prunedDemo(open: OpenRealtime = () => ({ send: () => {}, close: () => {} }), rate = quick.rate): Promise<Running> {
   return startServer({
     port: 0, host: '127.0.0.1', dataDir: fresh(), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret',
     live: { open, options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' } },
-    demo: { script: ringless, mediaDir: join(demoDir, 'media'), pace: { ...quick, rate }, voice: 'test-voice', record: async (text) => ({ pcm: new Uint8Array(text.length * 48 * 50), takes: 1 }) },
+    demo: { script, mediaDir: join(demoDir, 'media'), pace: { ...quick, rate }, voice: 'test-voice', record: async (text) => ({ pcm: new Uint8Array(text.length * 48 * 50), takes: 1 }) },
   });
 }
 
@@ -683,12 +684,12 @@ test("cutting Llull's ring on the headset has Momo say her line once for each se
     assert.equal(lines().length, 1, 'said once, and not for the other card');
 
     // The round after it plays as ever, on its own card.
-    const poster = cardsOf('n2').find((card) => card.id === 't125')!.title;
+    const darwin = cardsOf('n2').find((card) => card.id === 'darwin-tree')!.title;
     await run.demo!.playTake('n3');
     await over(run);
     await run.pipeline.idle();
-    const landed = titlesUnder(run, poster);
-    assert.ok(cardsOf('n3').every((card) => landed.includes(card.title)), 'Round 3 lands under the Neurones poster');
+    const landed = titlesUnder(run, darwin);
+    assert.ok(cardsOf('n3').every((card) => landed.includes(card.title)), "Round 3 lands under Darwin's notebook tree");
 
     // Set up again, the ring is back, and its cut has her say the line again.
     await run.demo!.goto('n3');
@@ -843,9 +844,9 @@ test("asked by voice to prune Llull's ring, the director cuts it as the headset'
   }
 });
 
-test("the lines Momo says as a held tree grows are kept in the demo folder in her realtime voice, said as written and never by another voice", () => {
+test("the lines Momo says outside a round (as a held tree grows, at the walkthrough's end) are kept in the demo folder in her realtime voice, said as written and never by another voice", () => {
   const lines = JSON.parse(readFileSync(join(demoDir, 'lines.json'), 'utf8')) as { voice: string; said?: Record<string, string> };
-  assert.deepEqual(Object.keys(lines.said ?? {}).sort(), ['daily', 'pruned', 'shared']);
+  assert.deepEqual(Object.keys(lines.said ?? {}).sort(), ['daily', 'handedOff', 'museCode', 'pruned', 'shared']);
   const voices = JSON.parse(readFileSync(join(demoDir, 'voice', 'voices.json'), 'utf8')) as Record<string, string>;
   for (const text of Object.values(lines.said!)) assert.equal(voices[recordingName(lines.voice, text)], 'realtime', text);
 });
