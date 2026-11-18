@@ -20,25 +20,27 @@ It is a native OpenXR app for the headset ([quest/](quest/README.md)) and a Type
 This is the judging build, one app named "Mind Forest" that joins the hosted service by itself. Hands only, no controllers.
 
 1. **Open the app and allow the room, then the microphone.** The first time you raise a hand the app asks to see the room, so the scene can sit at your real desk; refused, it sits at an assumed desk. It asks for the microphone when you first need it, at the lesson where you talk to Momo. If you refuse or miss that window, Momo shows a crossed-out microphone: pinch her and choose **Allow microphone**. Picking still works without it.
-2. **Take the welcome tree.** On a first launch one tree stands alone, "Welcome to Mind Forest". Its eight cards are lessons, each played by a hand drawn on the card:
-   - pinch a card;
+2. **Take the welcome tree.** On a first launch one tree stands alone, "Welcome to Mind Forest". Its eight cards are lessons, each played by a hand drawn on the card, and between them they teach:
+   - pinch a card to open it;
+   - pinch and hold a card until the ring fills, to grow a new layer from it;
    - grab to pan;
    - grab to pull or push between layers;
-   - pinch and hold to move a card;
+   - pinch and drag to move a card;
    - ask Momo;
    - show Momo part of a picture;
    - choose a layer on the small tree;
    - palms together to close.
 
-   One line over the tree says what to do next. Pinching the next card skips a lesson.
+   One line over the tree says what to do next. A pinch opens a card where it stands; each next lesson is reached by pinching and holding its card until the ring fills, which is how a new layer is made in every tree.
 3. **Ask Momo something.** Say "Hey Momo" (or "Hi Momo"), then what you want, such as "start a tree on Dutch still lifes". Momo answers in her own voice. Cards start to arrive round the open card within seconds, and she tells you about them as they land. While the conversation is open you can go on talking without the name, and talk over her.
 4. **Work a tree by hand.** Pinch a card to open it. Pinch and hold a card until the ring fills to start a layer on it and get more like it. Pinch the open card again to go into it, where a pen, an eraser and Send to Momo let you mark part of it and ask about that part.
-5. **Start from the library.** Around the desk lies the library, about 100 film scenes and 750 museum works. With no tree open, pinch one to ask Momo for a tree about it.
-6. **Connect Telegram, hand off, share.** Point at a tree on the desk and two buttons appear: Send to Agents and Share with Friends. Until Telegram is connected they say "Pair Telegram first": pinch that, or say "connect my Telegram" to Momo, and a panel shows three steps with the bot's name and a six-digit code to send it from your phone (an X closes the panel). Once connected, anything you send the bot lands in your forest, Send posts the tree's handoff file to your chat, and Share posts a link that grows a copy of the tree in a friend's forest.
+5. **Start from the library, or from a question.** Around the desk lies the library, about 100 film scenes and 750 museum works. With no tree open, pinch one to ask Momo for a tree about it, or pinch one of the three questions under "Ask Momo".
+6. **Open "Designing Mind Forest".** A new forest starts with five example trees. This one is the tree from the project's film, as far as its tenth round: how the idea of Mind Forest was worked out in Mind Forest, with the prototypes' pictures in its later layers.
+7. **Connect Telegram, hand off, share.** Point at a tree on the desk and two buttons appear: Send to Agents and Share with Friends. Until Telegram is connected they say "Pair Telegram first": pinch that, or say "connect my Telegram" to Momo, and a panel shows three steps with the bot's name and a six-digit code to send it from your phone (an X closes the panel). Once connected, anything you send the bot lands in your forest, Send posts the tree's handoff file to your chat, and Share posts a link that grows a copy of the tree in a friend's forest.
 
 Hold your palms together for a second to close the tree you are in.
 
-**The welcome tree afterwards.** The welcome tree stays in your forest. Once you put it away it stands on the desk with your own trees and the four example trees, also after the app is closed and opened again, and you can open it any time to see a lesson again. The **Gestures** button lists every gesture, and **Start the guide over** on that sheet begins the lessons from the first.
+**The welcome tree afterwards.** The welcome tree stays in your forest. Once you put it away it stands on the desk with your own trees and the five example trees, also after the app is closed and opened again, and you can open it any time to see a lesson again. The **Gestures** button lists every gesture, and **Start the guide over** on that sheet begins the lessons from the first.
 
 ## The hackathon's experience guidelines
 
