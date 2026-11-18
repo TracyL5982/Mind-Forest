@@ -157,7 +157,7 @@ Four more controls:
 
 When the last round, "From a tree to a forest" (step 31), has played to its end, Momo asks from her recording, with its caption: "Ready to take this to Muse Code, to have your mind forest built out?" (`said.museCode` in `lines.json`). She asks once in each set-up: a take of the last round played again without setting it up again asks nothing, and nor does a tree built whole with **Whole tree**, a take that is paused or stopped, or a bar moved to the end. **Ask about Muse Code** asks it again by hand. With "Rounds are scripted" off she does not ask.
 
-The next thing the user says to her, whatever it is, is to be answered from a second recording, "Handed off to Muse Code, with your default preference settings.", with the live Momo's own answer and tools held for that one turn, so nothing is handed off for real. As of 2026-11-17 that answer is not built: its wording is being chosen, since every take of it was heard as "Hand it off…", and the hold is the one being built for the prune line in Round 2.
+The next thing the user says to her, whatever it is, is answered from a second recording: "Done. It's handed off to Muse Code, with your default preference settings." (`said.handedOff`). Nothing is handed off for real. It is one of the director's held answers, as the prune of Llull's ring is: from the moment she starts to ask, her answer to each spoken turn waits for its words (2 s at most), and on the user's next turn her own answer is dropped, any tool she calls for it does nothing, and the recording is said once her question has ended. The turn after that is hers again.
 
 ### Recording Round 1
 
@@ -269,7 +269,7 @@ The user changed the storyboard on 2026-11-17, in `script.json` itself, so runni
 - Momo opens Round 2 in her own words, as long as the user's example and in its spirit ("Let's map it out. I built a few interactive cards from Darwin's 1837 branching notebook alongside a 3D biotecture model—sketch on whichever structure clicks!"), but claiming only what the cards are: "Let’s map it out: I’m bringing Darwin’s 1837 branching tree sketch and a Biotecture tower drawn like a tree. Sketch on whichever structure clicks." It was the best of her takes, asked for with `scripts/demo-lines.ts --only n2 --openings 3 --steer "<note>"`, and then given to both paces with `--answer`.
 - Darwin's 1837 tree ("I think") moved from Round 3 into Round 2, beside Biotecture, so those words are true of the round.
 - "More of this" is the long pinch on A disc of pictures, a Round 2 card, not on the Neurones poster.
-- Round 3 is asked from the Neurones poster, not Llull's ring, and is drawn on there.
+- Round 3 is asked from Darwin's notebook tree, not Llull's ring, and is drawn on there. Momo's wrap-up in Round 2 points at that card (`scripts/demo-lines.ts --wrap "<note>"`), and the user prunes Llull's ring. The Neurones poster leads no round.
 - "Layers?" is asked from WoodSwimmer, not Slice of Heartland, since two rounds asked from one card put both rounds' cards on one layer.
 
 ## How it works
