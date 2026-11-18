@@ -621,6 +621,7 @@ void OceanModel::shelve(const TreeRef& tree, std::optional<Vec3> from, const Mov
     }
     movers.push_back(m);
     Shelved kept{uid, tree, m, made->tilts, spot, plot, made->foot};
+    kept.top = made->box.center.y + made->box.size.y / 2;
     kept.branches = made->branches;
     kept.caption = made->caption;
     kept.pictures = made->pictures;

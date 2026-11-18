@@ -52,6 +52,10 @@ public:
         bool elsewhere = false;     // on another host: never with the service's token
     };
     std::optional<Video> video(int nodeID);
+    /// The Send and Share buttons over a tree in the forest: the service is asked for the tree's handoff (`handoff`, with it
+    /// alone in its scope), or to share it (`share`). True when it was told.
+    bool sendTree(const Tree& tree);
+    bool shareTree(const Tree& tree);
     /// A long pinch on a card of a service tree, open or closed (the user's rule, 2026-11-17): one with cards under it is gone
     /// into, its layer standing, and nothing is asked; one with none starts a layer on it and asks for more like it (`moreLike`).
     void longPinch(int nodeID);

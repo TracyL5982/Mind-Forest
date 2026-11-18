@@ -232,6 +232,9 @@ void OceanModel::tap(const Pick& pick) {
     case Pick::Kind::shelf:
         unfold(pick.index);
         break;
+    case Pick::Kind::coverButton:
+        coverButton(pick.index, pick.question);
+        break;
     case Pick::Kind::send:
         pressTree(true);
         break;
@@ -509,6 +512,21 @@ void OceanModel::runFlags() {
             logLine(fmt("[ocean] cover of %s: %d pictures showing, %d places waiting, of the %d its cards have:", s.tree->title.c_str(),
                         int(s.pictures.size()), plan.picks - int(s.pictures.size()), plan.choices) + cards);
         }
+    });
+    // AGENT: `-hoverCover <i> -hoverCoverAt <s> [-hoverCoverFor <s>]`: the tree at that place on the shelf counts as hovered, as
+    // a ray resting on it makes it (`tendHover`); `-coverButton send|share -coverButtonAt <s>` then presses one of its buttons.
+    at("hoverCoverAt", [](OceanModel& m) {
+        m.hoverForced = Flags::integer("hoverCover");
+        m.hoverForcedUntil = m.time + (Flags::number("hoverCoverFor") > 0 ? Flags::number("hoverCoverFor") : 6);
+        logLine(fmt("[ocean] -hoverCoverAt: the tree at %d on the shelf is hovered", m.hoverForced));
+    });
+    at("coverButtonAt", [](OceanModel& m) {
+        int i = m.hoverForced;
+        if (i < 0 || i >= int(m.shelf.size()) || !m.shelf[size_t(i)].buttons) {
+            logLine("[ocean] -coverButtonAt: no tree shows its buttons");
+            return;
+        }
+        m.coverButton(m.shelf[size_t(i)].uid, Flags::string("coverButton").value_or("send") == "share" ? 1 : 0);
     });
     at("bringAt", [](OceanModel& m) {
         if (m.peek) m.bringIn(m.peek->film);

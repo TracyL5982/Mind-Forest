@@ -168,6 +168,7 @@ void OceanModel::update(float dt) {
     if (!built) build();
     double now = time;
     if (agentBridge) agentBridge->frame(now);     // AGENT
+    tendHover(now);                                 // AGENT: Send and Share over a tree a hand points at
     // AGENT: the service's trees put away keep a picture in every place they can (`tendCovers`).
     if (agentBridge && now >= coversTendedAt + 0.5) {
         coversTendedAt = now;
